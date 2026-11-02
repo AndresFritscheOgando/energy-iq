@@ -1,0 +1,16 @@
+# Local environments, caches, and generated files
+.venv/
+.cache/
+.local-python/
+__pycache__/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.env
+.env.*
+!.env.example
+node_modules/
+.next/
+*.log
+private-bills/
+artifacts/private/

@@ -1,0 +1,23 @@
+[project]
+name = "energyiq-rd"
+version = "0.1.0"
+description = "EnergyIQ RD electricity intelligence platform"
+requires-python = ">=3.13,<3.14"
+dependencies = []
+
+[dependency-groups]
+dev = [
+    "pyright>=1.1.414",
+    "pytest",
+    "ruff",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["backend/tests"]
+pythonpath = ["backend/src"]
+addopts = "--import-mode=importlib"
+
+[tool.ruff]
+target-version = "py313"
+src = ["backend/src"]
+extend-exclude = [".cache", ".local-python"]
