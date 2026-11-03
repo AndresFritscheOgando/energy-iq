@@ -1,10 +1,10 @@
 # Implementation Progress
 
-**Current phase:** Phase 0 complete. Phase 1 reading history is next.
+**Current phase:** Phase 1 reading history. P1-01 complete.
 **Operating model:** Architect-led implementation; see [the engineering contract](09-ENGINEERING-CONTRACT.md).  
-**Current task:** P0-06 delivered. Next is P1-01, typed reading and meter event models. Implemented Phase 0 contracts are recorded in [Task 001](tasks/TASK-001-consumption-foundations.md), [Task 002](tasks/TASK-002-consumption-cli.md), and [spec 0001](specs/0001-phase-zero-domain-hardening.md).
+**Current task:** P1-01 delivered. Next is P1-02, stable ordering and duplicate detection for reading records. Phase 0 contracts are recorded in [Task 001](tasks/TASK-001-consumption-foundations.md), [Task 002](tasks/TASK-002-consumption-cli.md), and [spec 0001](specs/0001-phase-zero-domain-hardening.md). The P1-01 contract is [spec 0002](specs/0002-reading-meter-event-models.md).
 
-**Status:** Phase 0 passed its technical gate on 2026-11-02. The final suite passed 166 tests after domain hardening and style fixes. Ruff lint and formatting passed. Review covered all five source files and all three test files. No Phase 1 code was added.
+**Status:** Phase 0 passed its technical gate on 2026-11-02. On 2026-11-03, P1-01 added validated immutable reading and meter event models. The suite passed 217 tests. Ruff lint, formatting, and an explicit project Pyright check passed.
 
 ## Delivery status
 | Ticket | Status | Evidence / remaining work |
@@ -15,6 +15,7 @@
 | P0-04 | Complete | Elapsed-time helper plus stable observation sorting implemented; 12 elapsed-time and 21 sorting cases passed in the latest full 42-test run. |
 | P0-05 | Complete | Module CLI prompts for Decimal readings, prints consumption, and handles malformed/non-finite/domain/arithmetic errors, EOF, and cancellation. Added 38 CLI cases; latest full suite: 80 passed. |
 | P0-06 | Complete | All four build tasks and AC-1 through AC-7 in [spec 0001](specs/0001-phase-zero-domain-hardening.md) verified. Strict domain types, finite readings, isolated exact arithmetic, timestamp and pair errors, CLI regression cases, final review, and documentation delivered. Final suite: 166 passed. No commit requested. |
+| P1-01 | Complete | Frozen, slotted reading and meter event records, enum fields, UUID and UTC validation, exact bounded Decimal scale, optional provenance, and paired approval metadata. 51 new cases; full suite 217 passed. See [spec 0002](specs/0002-reading-meter-event-models.md). |
 
 ## Session log
 | Date | Task / outcome | Verification | Remaining work |
@@ -24,19 +25,23 @@
 | 2026-11-02 | Completed P0-05 local CLI and guarded module entry point; removed the import-time consumption demo. Reused domain arithmetic and added finite Decimal parsing, meaningful error/status handling, import-safety checks, and actual module subprocess coverage. Documented invocation and exit statuses. | `.venv/Scripts/python.exe -m pytest -q -p no:cacheprovider`: 80 passed. Ruff lint and format checks passed for eight Python files after correcting import order and one wrapped statement. | P0-06: final code review and domain hardening; do not mark Phase 0 complete yet. |
 | 2026-11-02 | Architect review drafted spec 0001 for P0-06. Direct probes reproduced integer acceptance, infinite output, caller context rounding, and incidental timestamp errors. Probed an explicit Decimal policy. | Existing baseline: 80 tests passed; Ruff lint and formatting passed. Git fetch succeeded, zero commits behind origin/main. | Hardening was pending at this point. User subsequently requested `/develop`, authorizing implementation of the draft. |
 | 2026-11-02 | Delivered P0-06 against spec 0001. Added strict Decimal types and finite guards, exact subtraction in an isolated context, shared UTC timestamp validation, and indexed observation pair errors. Added 86 behavioral regression cases, including real CLI subprocesses. Preserved existing interfaces, zero offset semantics, stable duplicates, and local execution. Reviewed correctness, architecture, privacy, clarity, and edge cases across every source and test file. Updated README, affected requirements, contracts, and roadmap. | Final `.venv/Scripts/python.exe -m pytest -q -p no:cacheprovider`: 166 passed. `.venv/Scripts/ruff.exe check backend`: all checks passed. `.venv/Scripts/ruff.exe format --check backend`: eight files already formatted. Initial Ruff findings in new integer fixtures and formatting were corrected before the final test run. Final document checks: 10 UTF-8 files and 31 local links passed. `git diff --check` passed after removing trailing whitespace from the changed README status line. | Phase 0 gate passed. P1-01 remains unstarted. Static typing, database integration, AI evaluations, and a separate fresh model review were not run; they are not Phase 0 gates. |
+| 2026-11-03 | Designed and implemented P1-01 in [spec 0002](specs/0002-reading-meter-event-models.md). Added immutable reading and meter event domain records with runtime validation. Reading values are finite nonnegative Decimal values with six meaningful fractional places and a maximum of `999999999999.999999`. UTC instants are explicit, and event approval actor and time are paired. No new dependency or infrastructure was added. | `uv sync --offline` succeeded. `uv run python -m pytest -q -p no:cacheprovider`: 217 passed. `uv run ruff check backend`: all checks passed. `uv run ruff format --check backend`: 11 files formatted. `uv run pyright --project pyproject.toml backend/src`: 0 errors and warnings. An unqualified Pyright invocation failed because the preexisting tracked `pyrightconfig.json` is empty; the explicit project command succeeds. | P1-02 duplicate policy and sorting remain. No persistence or ownership access exists yet. |
 
 ## Known gaps and constraints
 
-- Consumption requires Decimal inputs, including for whole numbers. The arithmetic policy uses precision 28, `Emin=-999999`, and `Emax=999999`, and rejects numeric rounding, overflow, and underflow. Exact subnormal values are allowed. Future reading scale and physical limits remain Phase 1 design work. Elapsed hours retain float approximation.
+- Consumption requires Decimal inputs, including for whole numbers. The arithmetic policy uses precision 28, `Emin=-999999`, and `Emax=999999`, and rejects numeric rounding, overflow, and underflow. Exact subnormal values are allowed. P1-01 defines a separate reading scale of six meaningful fractional places and a maximum of `999999999999.999999` kWh. Elapsed hours retain float approximation.
 - Source execution requires `backend/src` on `PYTHONPATH`; no distributable build or installed CLI command is configured. README documents invocation using the existing local environment.
 - Previous Windows pytest cache write warnings were avoided by disabling the optional cache provider for that invocation; no filesystem repair was made.
 - Git is now available on branch `features`. On 2026-11-02, `git fetch --quiet` succeeded and `git rev-list --count HEAD..origin/main` returned zero. Existing changes in `.gitignore`, `.idea/`, and `skills-lock.json` are outside this task. No commit was requested or made.
 - Spec 0001 exists locally but is ignored by the existing `.gitignore` rule `/docs` at line 21. Already tracked documentation remains tracked. The ignore rule was not changed, and the spec was not staged. No scope directory exists; the four build tasks remain in the spec and their completion is recorded in the delivery row above.
+- Spec 0002 is also ignored by that existing `/docs` rule. It needs explicit force staging when committing P1-01, without changing the unrelated ignore rule.
 - Observation sorting preserves duplicates and accepts typed kWh values without validating them; it does not resolve discontinuities, calculate intervals, or enforce meter ownership. It performs no data access. Callers must supply observations for one meter; Phase 1 adds domain models and duplicate/continuity enforcement.
+- P1-01 models validate individual records only. They do not compare readings, reject duplicate timestamps, apply status transitions, approve events, or compute intervals. Date only readings require a later explicit conversion policy; optional original local dates are provenance only.
+- The tracked `pyrightconfig.json` is empty. Use `uv run pyright --project pyproject.toml backend/src` until static typing configuration is defined; the unqualified command fails before analysis.
 - Verification used synthetic fixtures and no external services, personal data, or new dependencies. Sandbox command startup still failed, so local checks used approved execution outside the sandbox. No deployment or application write action was performed.
 
 ## Next action
-Design P1-01 reading and meter event models, settling reading fields, value scale and limits, UTC timestamp contracts, and event semantics before implementation. Phase 0 is complete; no commit or new infrastructure is required for this handoff.
+Implement P1-02 stable sorting and duplicate timestamp detection for typed reading records. Define the conflict result and ensure input preservation before computing intervals in P1-03.
 
 ## Historical evidence
 The original dated implementation reviews, test runs, and former assessments are preserved in [the archived progress log](archive/PROGRESS-MENTORSHIP.md). Historical next actions there are superseded by this file.

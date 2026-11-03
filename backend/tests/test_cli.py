@@ -28,7 +28,7 @@ def test_cli_prints_consumption_for_valid_readings(
     expected: str,
 ):
     readings = iter([previous, current])
-    monkeypatch.setattr("builtins.input", lambda prompt: next(readings))
+    monkeypatch.setattr("builtins.input", lambda prompt="": next(readings))
 
     assert main() == 0
 
@@ -61,7 +61,7 @@ def test_cli_rejects_malformed_or_non_finite_readings(
     values = ["100.1", "142.2"]
     values[position] = invalid
     readings = iter(values)
-    monkeypatch.setattr("builtins.input", lambda prompt: next(readings))
+    monkeypatch.setattr("builtins.input", lambda prompt="": next(readings))
 
     assert main() == 2
 
@@ -88,7 +88,7 @@ def test_cli_reports_domain_and_arithmetic_errors(
     message: str,
 ):
     readings = iter([previous, current])
-    monkeypatch.setattr("builtins.input", lambda prompt: next(readings))
+    monkeypatch.setattr("builtins.input", lambda prompt="": next(readings))
 
     assert main() == 2
 
