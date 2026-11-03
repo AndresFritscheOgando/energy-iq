@@ -1,6 +1,6 @@
 # EnergyIQ RD — Energy Intelligence Platform
 
-**Status:** Phase 0 is complete. Phase 1 P1-01 reading and meter event models are implemented. The latest suite passed 217 tests. Duplicate detection is next.
+**Status:** Phase 0 is complete. Phase 1 P1-01 through P1-03 reading models, ordering, conflicts, and interval boundaries are implemented. The latest suite passed 254 tests. Time normalization and coverage are next.
 **Delivery model:** The assistant acts as software architect and implementation engineer, delivering complete features, tests, and documentation.  
 **Goal:** Build a production-oriented, portfolio-quality electricity intelligence product for the Dominican Republic, through architect-led implementation following the product specifications and roadmap.
 
@@ -101,7 +101,7 @@ importable during tests. There is no distributable-package build configuration y
 Run `uv run python -m pytest`. The `-m` option runs pytest as a module through the
 selected Python interpreter. If Windows denies writes to `.pytest_cache`, run
 `uv run python -m pytest -q -p no:cacheprovider` to disable only the optional cache
-for that invocation. The latest verified suite contains 217 passing tests.
+for that invocation. The latest verified suite contains 254 passing tests.
 
 `uv run ruff check backend` checks common code issues.
 `uv run ruff format --check backend` checks formatting without changing files.
@@ -159,3 +159,25 @@ context. An optional original local date records provenance but never supplies
 an inferred UTC instant. Event approval actor and time must appear together.
 These records do not sort readings, reject duplicates, apply event boundaries,
 or persist data. See the [P1-01 spec](docs/specs/0002-reading-meter-event-models.md).
+
+`energyiq.readings.order_readings` accepts readings for one meter and returns an
+immutable `ReadingOrderResult`. Its `ordered` tuple keeps every input occurrence
+in timestamp order, with input order preserved at equal timestamps. Its
+`conflicts` tuple contains one group for each repeated timestamp, including
+original input indices and readings of every status. Invalid items and mixed
+meters fail with the offending index. Callers must resolve nonempty conflicts
+before using the result for interval calculations. The operation does not
+mutate input, access storage, or calculate consumption. See the
+[P1-02 spec](docs/specs/0003-reading-order-conflicts.md).
+
+`energyiq.readings.compute_intervals` takes a conflict free `ReadingOrderResult`
+and meter events. It returns one immutable interval for each adjacent pair of
+nonvoided readings. A continuous pair of valid readings yields an exact Decimal
+kWh difference. A flagged endpoint, unexplained decrease, or meter event in the
+pair yields an invalid interval with no kWh value and an explicit reason. Events
+at the current reading time belong to the new segment. Unapproved events and
+unsupported rollover or calibration events also block consumption. The function
+validates order and meter identity, consumes event input once, and performs no
+storage or authorization. The caller must enforce meter ownership before
+supplying source records. See the
+[P1-03 spec](docs/specs/0004-reading-interval-boundaries/index.md).
