@@ -1,130 +1,53 @@
-# EnergyIQ RD — Energy Intelligence Platform
+# EnergyIQ RD
 
-**Status:** Phase 0 is complete. Phase 1 P1-01 through P1-03 reading models, ordering, conflicts, and interval boundaries are implemented. The latest suite passed 254 tests. Time normalization and coverage are next.
-**Delivery model:** The assistant acts as software architect and implementation engineer, delivering complete features, tests, and documentation.  
-**Goal:** Build a production-oriented, portfolio-quality electricity intelligence product for the Dominican Republic, through architect-led implementation following the product specifications and roadmap.
+**Electricity intelligence for households in the Dominican Republic.** Track your meters, understand your consumption, check your bills, and eventually ask an AI assistant questions grounded in your own data.
 
-## Product in one paragraph
-EnergyIQ RD manages several properties and meters per user; accepts timestamped cumulative meter readings; analyzes consumption and billing; ingests electric bills for verified extraction; supports forecasting, anomaly detection, evidence-based AI explanations, document search via RAG, and eventually authorized agent actions through an MCP interface. Start with deterministic domain logic. AI is introduced only after baseline measurements and evaluation datasets exist.
+---
 
-## Read this documentation in order
-1. [`AGENTS.md`](AGENTS.md) and [`CLAUDE.md`](CLAUDE.md) — mandatory architecture and implementation instructions.
-2. [`docs/01-PRD.md`](docs/01-PRD.md) — outcomes, users, scope and acceptance criteria.
-3. [`docs/02-ARCHITECTURE.md`](docs/02-ARCHITECTURE.md) — modular design, data flows, deployment boundaries.
-4. [`docs/03-TECH-STACK.md`](docs/03-TECH-STACK.md) — technology decisions and setup rules.
-5. [`docs/04-DATA-MODEL-API.md`](docs/04-DATA-MODEL-API.md) — data contracts, invariants, API outline.
-6. [`docs/05-IMPLEMENTATION-ROADMAP.md`](docs/05-IMPLEMENTATION-ROADMAP.md) — incremental phases and gates.
-7. [`docs/06-USER-STORIES.md`](docs/06-USER-STORIES.md) — backlog and acceptance cases.
-8. [`docs/07-TESTING-EVALUATIONS.md`](docs/07-TESTING-EVALUATIONS.md) — software and AI quality gates.
-9. [`docs/08-SECURITY-OPERATIONS.md`](docs/08-SECURITY-OPERATIONS.md) — security, observability and production standards.
-10. [`docs/09-ENGINEERING-CONTRACT.md`](docs/09-ENGINEERING-CONTRACT.md) — implementation responsibilities, verification, and delivery workflow.
-11. [`docs/10-AI-DESIGN.md`](docs/10-AI-DESIGN.md) — local Ollama, document extraction, RAG, tools, MCP.
-12. [`docs/11-DECISIONS-OPEN-QUESTIONS.md`](docs/11-DECISIONS-OPEN-QUESTIONS.md) — ADR index, assumptions and unresolved issues.
-13. [`docs/adr/`](docs/adr/) — architectural decision records.
-14. [`docs/tasks/TASK-001-consumption-foundations.md`](docs/tasks/TASK-001-consumption-foundations.md) and [`docs/tasks/TASK-002-consumption-cli.md`](docs/tasks/TASK-002-consumption-cli.md) — foundation and CLI contracts.
-15. [`docs/PROGRESS.md`](docs/PROGRESS.md) — implemented behavior, actual verification, gaps, and next task.
+## What it will do
 
-## Locked user decisions
-- Support **personal monitoring, multiple households/properties, bill intelligence and long-term full energy intelligence**.
-- Use a **modular monolith**, not microservices.
-- Build a **full-stack app**: Next.js, FastAPI, PostgreSQL, tests, Docker.
-- The assistant acts as **architect and implementation engineer**: it implements domain logic, APIs, integrations, AI workflows, tests, and documentation directly. Advancement depends on technical acceptance criteria.
-- Showcase production backend practices; LLMs/RAG; agents/MCP; forecasting/ML; evaluation, security and observability.
-- **Local Ollama** is the preferred inference provider. Provider abstraction is required; model selection is benchmarked, not assumed.
-- This is a **portfolio** project, not a commercial product. Avoid payment, subscription and marketing scope.
+- **Multiple properties and meters per user.** Record cumulative kWh readings over time.
+- **Consumption analysis.** Turn raw meter readings into trustworthy usage intervals, and catch resets, meter replacements, and suspicious decreases.
+- **Bill intelligence.** Upload an electric bill, get proposed fields extracted by AI, and confirm them yourself before anything is saved.
+- **Tariff-aware cost estimates** from effective-dated, cited tariff rules, never from a hardcoded "current rate".
+- **Forecasting and anomaly detection**, evaluated against simple baselines.
+- **An energy assistant** that answers questions from your data and documents, with citations (RAG over a local LLM).
+- **Agent actions over MCP** that always need your explicit approval and are audited.
 
-## Non-negotiable principles
-1. Calculations such as kWh differences, currency totals and tariff application are deterministic, testable domain code; the LLM never invents authoritative numbers.
-2. Bills are untrusted input; AI extraction yields **proposed fields** requiring validation and an explicit confirmation step.
-3. Historical tariffs are **effective-dated and source-backed**. Do not pretend a synthetic price is the current Dominican tariff.
-4. Never place personal utility account numbers, full addresses or real bills in public repositories, screenshots or evaluation data.
-5. No auto-execution of consequential agent actions; authorize and audit every write action.
-6. Maintain a repeatable synthetic demo fixture and documented evaluation results.
+## Design principles
 
-## How to continue implementation
-At the repository root, ask the implementation agent:
+1. **The numbers are computed, not generated.** kWh differences, money totals, and tariffs come from tested, deterministic code. The LLM never invents an authoritative number.
+2. **Bills are untrusted input.** AI extraction only proposes values. A human confirms them.
+3. **Money is exact.** Amounts use `Decimal` or integer centavos, never floating point.
+4. **Privacy first.** Inference runs on a local LLM by default (Ollama). The repository, screenshots, and evaluation data never contain real bills or account details.
+5. **No silent actions.** Every consequential write by an agent needs explicit approval and is logged.
 
-> Read `AGENTS.md`, `README.md`, `docs/PROGRESS.md`, and the implementation roadmap. Act as the architect and implementation engineer. Implement the next incomplete ticket within the current phase, including tests, validation, and documentation. Use the documented defaults and report any unresolved blocker.
+## Tech stack
 
-## Documentation maintenance
-Any changed requirement updates its PRD item, user story, impacted API contract, test, phase gate and ADR. Keep `docs/PROGRESS.md` updated after review. No claim of passing tests without actually running them.
+| Layer | Choice |
+|---|---|
+| Domain and backend | Python 3.13, FastAPI (planned), modular monolith |
+| Data | PostgreSQL (planned) |
+| Frontend | Next.js (planned) |
+| AI | Local Ollama behind a provider abstraction (planned) |
+| Tooling | `uv`, pytest, Ruff, Pyright (strict) |
 
-## Phase 0 local development setup
+## Quickstart
 
-Run these commands in PowerShell from the repository root. Python 3.13 is the
-project target; `uv` manages the interpreter, virtual environment, and dependencies.
+You need [uv](https://docs.astral.sh/uv/). Run these commands in PowerShell from the repository root.
 
 ```powershell
-# Keep downloaded packages and the managed interpreter inside ignored directories.
-$env:UV_CACHE_DIR = Join-Path $PWD '.cache/uv'
-$env:UV_PYTHON_INSTALL_DIR = Join-Path $PWD '.local-python'
-
-# Download Python 3.13 without adding a global executable shortcut.
-uv python install 3.13 --no-bin
-
-# Resolve dependencies into uv.lock and install them into a local .venv.
-uv sync
-
-# Run the project interpreter and display its version and executable path.
-uv run python -c "import sys; print(sys.version); print(sys.executable)"
-
-# Verify that the test runner is installed in this environment.
-uv run python -m pytest --version
+uv python install 3.13   # install the project's Python version
+uv sync                  # create .venv and install dependencies
+uv run python -m pytest  # run the test suite
 ```
 
-The environment variables above apply to the current PowerShell session. Set them
-again in a new terminal when using this repository-local interpreter location.
-No virtual-environment activation is required with `uv run`.
-
-`pyproject.toml` declares project metadata, the Python version range, development
-tools, and tool configuration. `uv.lock` will record the resolved versions after
-successful dependency resolution; it should be version-controlled. `.venv`,
-`.cache`, and `.local-python` are generated locally and ignored.
-
-The package starts at `backend/src/energyiq`. Its empty `__init__.py` identifies
-the package. `consumption.py` calculates cumulative-reading differences using
-Decimal inputs and rejects unsupported types, nonfinite values, negative values,
-and decreasing readings. Its explicit local Decimal context returns an exact
-result or raises an arithmetic error, independent of the caller's settings.
-`observations.py`
-calculates elapsed hours between strictly increasing, timezone-aware timestamps
-with zero UTC offsets. Its `sort_observations` helper accepts timestamp/Decimal
-pairs for one meter, validates UTC timestamps, and returns a chronological copy
-without mutating the input collection. Equal timestamps and exact duplicates
-remain in their original relative order for later Phase 1 validation. Unsupported
-timestamp types and malformed observation pairs raise clear TypeError errors.
-Tests live
-in `backend/tests`. Pytest's configured
-`pythonpath` makes the source package
-importable during tests. There is no distributable-package build configuration yet.
-
-Run `uv run python -m pytest`. The `-m` option runs pytest as a module through the
-selected Python interpreter. If Windows denies writes to `.pytest_cache`, run
-`uv run python -m pytest -q -p no:cacheprovider` to disable only the optional cache
-for that invocation. The latest verified suite contains 254 passing tests.
-
-`uv run ruff check backend` checks common code issues.
-`uv run ruff format --check backend` checks formatting without changing files.
-Ruff does not establish domain correctness; that is the purpose of behavioral
-tests and review. See `docs/PROGRESS.md` for the last recorded checks,
-remaining implementation gaps, and next task.
-
-## Run the local consumption CLI
-
-From the repository root in PowerShell:
+### Try the consumption calculator
 
 ```powershell
-# Make the source package importable for this terminal session.
 $env:PYTHONPATH = Join-Path $PWD 'backend/src'
 uv run python -m energyiq
 ```
-
-The source package is not installed as a distributable yet. Set `PYTHONPATH`
-again in a new terminal; the pytest source-path configuration applies only to tests.
-If the environment is already synchronized, `.venv/Scripts/python.exe -m energyiq`
-also works with the same `PYTHONPATH` setting.
-
-Example session with synthetic readings:
 
 ```text
 Previous cumulative reading (kWh): 13007.10
@@ -132,52 +55,61 @@ Current cumulative reading (kWh): 13007.30
 Consumption: 0.20 kWh
 ```
 
-Use a decimal point without thousands separators. The CLI accepts surrounding
-whitespace and valid Decimal exponent notation. Invalid, non-finite, negative,
-decreasing, or unsupported arithmetic inputs produce a clear stderr error and
-exit status 2. Incomplete input also returns 2; Ctrl+C returns 130. Successful
-calculations return 0. Each invocation performs one calculation and stores no data.
+Type decimal numbers without thousands separators. Negative, decreasing, or invalid input prints a clear error and exits with status 2. The calculator does not store any data.
 
-Consumption arithmetic uses precision 28 with `Emin=-999999` and `Emax=999999`.
-Results that would lose numeric precision, overflow, or underflow fail clearly;
-the function never returns a silently rounded consumption value. Exact very small
-results are permitted through `1e-1000026`. Ordinary fractional output such as
-`0.20` is preserved. This computation policy is separate from the Phase 1
-reading scale and bound. Direct Python callers
-must supply Decimal objects, including for whole numbers; elapsed time helpers
-require datetime objects with zero UTC offsets. See the
-[hardening spec](docs/specs/0001-phase-zero-domain-hardening.md) for the contract.
+<details>
+<summary>Optional: keep Python and the uv cache inside the repo</summary>
 
-## Phase 1 reading records
+```powershell
+$env:UV_CACHE_DIR = Join-Path $PWD '.cache/uv'
+$env:UV_PYTHON_INSTALL_DIR = Join-Path $PWD '.local-python'
+uv python install 3.13 --no-bin
+uv sync
+```
 
-`energyiq.readings` provides immutable `Reading` and `MeterEvent` dataclasses.
-They require UUID identities, explicit UTC instants, and enum values for source,
-status, or event kind. Cumulative kWh is a finite nonnegative `Decimal` with at
-most six meaningful fractional places and a maximum of
-`999999999999.999999`. Validation does not round or alter the caller's Decimal
-context. An optional original local date records provenance but never supplies
-an inferred UTC instant. Event approval actor and time must appear together.
-These records do not sort readings, reject duplicates, apply event boundaries,
-or persist data. See the [P1-01 spec](docs/specs/0002-reading-meter-event-models.md).
+These variables last only for the current terminal session. `.venv`, `.cache`, and `.local-python` are git-ignored.
+</details>
 
-`energyiq.readings.order_readings` accepts readings for one meter and returns an
-immutable `ReadingOrderResult`. Its `ordered` tuple keeps every input occurrence
-in timestamp order, with input order preserved at equal timestamps. Its
-`conflicts` tuple contains one group for each repeated timestamp, including
-original input indices and readings of every status. Invalid items and mixed
-meters fail with the offending index. Callers must resolve nonempty conflicts
-before using the result for interval calculations. The operation does not
-mutate input, access storage, or calculate consumption. See the
-[P1-02 spec](docs/specs/0003-reading-order-conflicts.md).
+### Quality checks
 
-`energyiq.readings.compute_intervals` takes a conflict free `ReadingOrderResult`
-and meter events. It returns one immutable interval for each adjacent pair of
-nonvoided readings. A continuous pair of valid readings yields an exact Decimal
-kWh difference. A flagged endpoint, unexplained decrease, or meter event in the
-pair yields an invalid interval with no kWh value and an explicit reason. Events
-at the current reading time belong to the new segment. Unapproved events and
-unsupported rollover or calibration events also block consumption. The function
-validates order and meter identity, consumes event input once, and performs no
-storage or authorization. The caller must enforce meter ownership before
-supplying source records. See the
-[P1-03 spec](docs/specs/0004-reading-interval-boundaries/index.md).
+```powershell
+uv run python -m pytest -q    # tests (add -p no:cacheprovider if Windows blocks .pytest_cache)
+uv run ruff check .           # lint
+uv run ruff format --check .  # formatting
+uv run pyright                # strict type checking
+```
+
+## What's implemented so far
+
+All code lives in [`backend/src/energyiq`](backend/src/energyiq). Tests live in [`backend/tests`](backend/tests).
+
+| Module | What it does | Contract |
+|---|---|---|
+| `consumption` | Exact kWh difference between two cumulative readings. Rejects negative, decreasing, and non-finite values. | [spec 0001](docs/specs/0001-phase-zero-domain-hardening.md) |
+| `observations` | UTC elapsed-time helpers and stable chronological sorting. | [spec 0001](docs/specs/0001-phase-zero-domain-hardening.md) |
+| `cli` | The interactive consumption calculator shown above. | [Task 002](docs/tasks/TASK-002-consumption-cli.md) |
+| `readings` models | Immutable, validated `Reading` and `MeterEvent` records with UUIDs, UTC instants, and bounded `Decimal` kWh. | [spec 0002](docs/specs/0002-reading-meter-event-models.md) |
+| `readings.order_readings` | Sorts one meter's readings and reports any duplicate-timestamp conflicts. | [spec 0003](docs/specs/0003-reading-order-conflicts.md) |
+| `readings.compute_intervals` | Builds consumption intervals and marks an interval invalid, with a reason, when it crosses a meter event, a flagged reading, or a decrease. | [spec 0004](docs/specs/0004-reading-interval-boundaries/index.md) |
+
+**Next up:** time normalization and coverage (P1-04).
+
+## Documentation
+
+| Topic | Document |
+|---|---|
+| Product requirements | [01-PRD](docs/01-PRD.md) |
+| Architecture | [02-ARCHITECTURE](docs/02-ARCHITECTURE.md) |
+| Tech stack decisions | [03-TECH-STACK](docs/03-TECH-STACK.md) |
+| Data model and API | [04-DATA-MODEL-API](docs/04-DATA-MODEL-API.md) |
+| Roadmap and phase gates | [05-IMPLEMENTATION-ROADMAP](docs/05-IMPLEMENTATION-ROADMAP.md) |
+| User stories | [06-USER-STORIES](docs/06-USER-STORIES.md) |
+| Testing and AI evaluations | [07-TESTING-EVALUATIONS](docs/07-TESTING-EVALUATIONS.md) |
+| Security and operations | [08-SECURITY-OPERATIONS](docs/08-SECURITY-OPERATIONS.md) |
+| AI design (Ollama, RAG, MCP) | [10-AI-DESIGN](docs/10-AI-DESIGN.md) |
+| Decisions and open questions | [11-DECISIONS-OPEN-QUESTIONS](docs/11-DECISIONS-OPEN-QUESTIONS.md), [ADRs](docs/adr/) |
+| Progress log | [PROGRESS](docs/PROGRESS.md) |
+
+## How this project is built
+
+This is a portfolio project, not a commercial product. It is built with an AI coding agent acting as architect and implementation engineer under a written contract: [`AGENTS.md`](AGENTS.md) and the [engineering contract](docs/09-ENGINEERING-CONTRACT.md). Each roadmap ticket gets a spec, tests, review, and a [progress](docs/PROGRESS.md) entry that records only the checks that were actually run. The project does not claim tests pass unless they were run.
