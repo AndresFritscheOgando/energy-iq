@@ -9,6 +9,8 @@ As a resident, I want to calculate consumed kWh between two readings so I unders
 - Negative values -> validation error.
 - Decreasing values without reset event -> error, not negative consumption.
 - Unit test exact inputs and error type.
+- Direct domain calls require Decimal values and reject NaN, infinity, and unsupported runtime types, including bools.
+- Consumption is exact within the documented arithmetic policy or fails clearly; caller Decimal settings cannot silently change the result.
 
 ### US-002 — View reading history (P1)
 As a resident, I want dated readings and intervals so I see a trend.

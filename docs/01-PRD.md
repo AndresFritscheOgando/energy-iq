@@ -39,7 +39,7 @@ A self-hostable portfolio-grade energy intelligence web app for Dominican reside
 | FR-01 | Create and manage multiple properties per user | MVP-web | Owner-isolated API tests |
 | FR-02 | Manage one or more meters per property with units and status | MVP-web | CRUD tests |
 | FR-03 | Record cumulative meter reading, time, source and notes | MVP | Validation + test matrix |
-| FR-04 | Compute validated interval kWh and date-normalized usage | MVP | Deterministic unit tests |
+| FR-04 | Compute validated interval kWh and date-normalized usage | MVP | Deterministic unit tests; kWh arithmetic is exact or fails explicitly |
 | FR-05 | Reject/flag duplicates, reversals, reset and replacement events | MVP | Boundary tests |
 | FR-06 | Browse history, charts and basic summary | MVP-web | UI/API integration tests |
 | FR-07 | Create bill periods, billed kWh, amount and distributor | MVP-web | Domain/API tests |

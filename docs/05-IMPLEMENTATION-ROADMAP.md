@@ -23,6 +23,12 @@
 - P0-06 Review and harden Phase 0 code, run required checks, update documentation, and record verified delivery status. Commit when requested and Git is available.
 
 ## Phase 1 tickets
+
+Phase 0 gate passed on 2026-11-02: 166 tests, Ruff lint, and Ruff formatting passed.
+The final review covered every Phase 0 source and test file. Exact arithmetic,
+runtime validation, UTC ordering, and real CLI subprocess behavior are verified.
+See [progress](PROGRESS.md) for commands, evidence, and remaining limits.
+
 - P1-01 Define reading and meter event models using type hints/dataclasses.
 - P1-02 Implement stable sorting and duplicate detection.
 - P1-03 Compute intervals from ordered readings, with reset/replacement boundary rules.
