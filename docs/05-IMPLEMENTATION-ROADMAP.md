@@ -30,8 +30,8 @@ runtime validation, UTC ordering, and real CLI subprocess behavior are verified.
 See [progress](PROGRESS.md) for commands, evidence, and remaining limits.
 
 - P1-01 Complete on 2026-11-03: validated typed reading and meter event dataclasses, 217 passing tests, Ruff checks and explicit project Pyright check passed. See [spec 0002](specs/0002-reading-meter-event-models.md).
-- P1-02 Implement stable sorting and duplicate detection.
-- P1-03 Compute intervals from ordered readings, with reset/replacement boundary rules.
+- P1-02 Complete on 2026-11-03: stable typed reading ordering and complete duplicate timestamp conflict groups. Further contract tests brought the full suite to 231 passing tests. See [spec 0003](specs/0003-reading-order-conflicts.md).
+- P1-03 Complete on 2026-11-03: pure interval calculation from conflict free ordered readings, with explicit valid and invalid results for resets, replacements, unapproved or unsupported events, flagged readings, and unexplained decreases. Full suite 254 passed after further boundary tests; Ruff and explicit project Pyright passed. See [spec 0004](specs/0004-reading-interval-boundaries/index.md).
 - P1-04 Compute time-normalized consumption; characterize missing intervals.
 - P1-05 Property-based/invariant tests as optional advanced challenge.
 - P1-06 Document cumulative vs incremental meter semantics, discontinuity rules, and operational trade-offs.
