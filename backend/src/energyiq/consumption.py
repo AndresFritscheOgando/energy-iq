@@ -11,6 +11,25 @@ from decimal import (
 )
 
 
+def exact_kwh_context() -> Context:
+    """Return a fresh Decimal context for exact kWh arithmetic.
+
+    Precision 28 with every lossy signal trapped, so a result that cannot be
+    held exactly raises a DecimalException instead of rounding. The policy is
+    fixed independently of the caller's context and of decimal.DefaultContext.
+    """
+    return Context(
+        prec=28,
+        rounding=ROUND_HALF_EVEN,
+        Emin=-999999,
+        Emax=999999,
+        capitals=1,
+        clamp=0,
+        flags=[],
+        traps=[InvalidOperation, DivisionByZero, Overflow, Underflow, Inexact],
+    )
+
+
 def calculate_consumption(
     previous_reading: Decimal, current_reading: Decimal
 ) -> Decimal:
@@ -43,17 +62,5 @@ def calculate_consumption(
     if current_reading < previous_reading:
         raise ValueError("current reading cannot be less than previous reading")
 
-    # Fix the arithmetic policy, including traps and flags, independently of
-    # both the caller's context and mutable decimal.DefaultContext settings.
-    policy = Context(
-        prec=28,
-        rounding=ROUND_HALF_EVEN,
-        Emin=-999999,
-        Emax=999999,
-        capitals=1,
-        clamp=0,
-        flags=[],
-        traps=[InvalidOperation, DivisionByZero, Overflow, Underflow, Inexact],
-    )
-    with localcontext(policy):
+    with localcontext(exact_kwh_context()):
         return current_reading - previous_reading
