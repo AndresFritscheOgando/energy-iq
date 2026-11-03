@@ -13,6 +13,9 @@
 - equal readings = zero.
 - previous > current without event -> invalid.
 - negative, NaN, infinite, non-numeric input -> rejected.
+- Direct consumption calls reject integer, float, bool, string, and None inputs with TypeError; nonfinite Decimal values raise ValueError before comparison.
+- Exact subtraction or explicit arithmetic failure under the documented precision 28 policy; verify caller precision, rounding, exponent limits, traps, and flags do not affect results or change after a call.
+- Unsupported timestamp types and malformed observation pairs raise clear errors, while stable ordering, duplicates, and input preservation remain intact.
 - same timestamp and leap/daylight/timezone handling explicit (Dominican Republic timezone currently no DST).
 - meter replacement/reset yields segment break and no spurious negative interval.
 - no interpolating missing data into factual consumption.

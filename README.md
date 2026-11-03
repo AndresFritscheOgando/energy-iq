@@ -1,6 +1,6 @@
 # EnergyIQ RD — Energy Intelligence Platform
 
-**Status:** Phase 0 domain helpers and local consumption CLI implemented; the latest suite passed 80 tests. Final Phase 0 hardening and verification remain open.  
+**Status:** Phase 0 is complete, including domain hardening and the local consumption CLI. The latest suite passed 166 tests. Phase 1 reading and meter event models are next.
 **Delivery model:** The assistant acts as software architect and implementation engineer, delivering complete features, tests, and documentation.  
 **Goal:** Build a production-oriented, portfolio-quality electricity intelligence product for the Dominican Republic, through architect-led implementation following the product specifications and roadmap.
 
@@ -83,12 +83,17 @@ successful dependency resolution; it should be version-controlled. `.venv`,
 
 The package starts at `backend/src/energyiq`. Its empty `__init__.py` identifies
 the package. `consumption.py` calculates cumulative-reading differences using
-Decimal inputs and rejects negative or decreasing readings. `observations.py`
+Decimal inputs and rejects unsupported types, nonfinite values, negative values,
+and decreasing readings. Its explicit local Decimal context returns an exact
+result or raises an arithmetic error, independent of the caller's settings.
+`observations.py`
 calculates elapsed hours between strictly increasing, timezone-aware timestamps
 with zero UTC offsets. Its `sort_observations` helper accepts timestamp/Decimal
 pairs for one meter, validates UTC timestamps, and returns a chronological copy
 without mutating the input collection. Equal timestamps and exact duplicates
-remain in their original relative order for later Phase 1 validation. Tests live
+remain in their original relative order for later Phase 1 validation. Unsupported
+timestamp types and malformed observation pairs raise clear TypeError errors.
+Tests live
 in `backend/tests`. Pytest's configured
 `pythonpath` makes the source package
 importable during tests. There is no distributable-package build configuration yet.
@@ -96,7 +101,7 @@ importable during tests. There is no distributable-package build configuration y
 Run `uv run python -m pytest`. The `-m` option runs pytest as a module through the
 selected Python interpreter. If Windows denies writes to `.pytest_cache`, run
 `uv run python -m pytest -q -p no:cacheprovider` to disable only the optional cache
-for that invocation. The latest verified suite contains 80 passing tests.
+for that invocation. The latest verified suite contains 166 passing tests.
 
 `uv run ruff check backend` checks common code issues.
 `uv run ruff format --check backend` checks formatting without changing files.
@@ -132,3 +137,13 @@ whitespace and valid Decimal exponent notation. Invalid, non-finite, negative,
 decreasing, or unsupported arithmetic inputs produce a clear stderr error and
 exit status 2. Incomplete input also returns 2; Ctrl+C returns 130. Successful
 calculations return 0. Each invocation performs one calculation and stores no data.
+
+Consumption arithmetic uses precision 28 with `Emin=-999999` and `Emax=999999`.
+Results that would lose numeric precision, overflow, or underflow fail clearly;
+the function never returns a silently rounded consumption value. Exact very small
+results are permitted through `1e-1000026`. Ordinary fractional output such as
+`0.20` is preserved. This computation policy is separate from the reading scale
+and physical ranges that later domain models will define. Direct Python callers
+must supply Decimal objects, including for whole numbers; elapsed time helpers
+require datetime objects with zero UTC offsets. See the
+[hardening spec](docs/specs/0001-phase-zero-domain-hardening.md) for the contract.

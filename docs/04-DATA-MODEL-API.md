@@ -29,6 +29,16 @@
 9. Missing readings are not fabricated. Forecasts are predicted values with method, intervals and uncertainty, never actuals.
 
 ## Conceptual REST surface (version prefix `/api/v1`)
+
+The implemented Phase 0 calculation boundary requires finite nonnegative Decimal
+inputs and returns an exact difference within a local precision 28 arithmetic
+policy, or raises a Decimal arithmetic exception. It rejects unsupported runtime
+types and does not coerce whole numbers, floats, or strings. This computation
+policy is independent of future reading storage scale and physical range rules.
+Elapsed time and sorting require datetime timestamps with zero UTC offsets.
+These are local function contracts, not HTTP endpoints; API error mapping remains
+Phase 2 work. See [Task 001](tasks/TASK-001-consumption-foundations.md).
+
 | Method/path | Purpose | Phase |
 |---|---|---|
 | `POST /auth/login`, `POST /auth/logout`, `GET /auth/me` | Auth/session | 2 |

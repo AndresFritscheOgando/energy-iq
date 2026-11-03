@@ -1,5 +1,6 @@
-from datetime import UTC, datetime, timedelta, timezone
+from datetime import UTC, date, datetime, timedelta, timezone, tzinfo
 from decimal import Decimal
+from typing import cast
 
 import pytest
 
@@ -208,3 +209,81 @@ def test_sort_validates_timezone_even_for_one_observation(offset: timezone | Non
 
     with pytest.raises(ValueError, match="index 0"):
         sort_observations([observation])
+
+
+@pytest.mark.parametrize("position", [0, 1], ids=["previous", "current"])
+@pytest.mark.parametrize("invalid", [None, "2026-11-02", 1, True, date(2026, 11, 2)])
+def test_elapsed_hours_rejects_unsupported_types(position: int, invalid: object):
+    timestamps = [
+        datetime(2026, 11, 1, tzinfo=UTC),
+        datetime(2026, 11, 2, tzinfo=UTC),
+    ]
+    timestamps[position] = cast(datetime, invalid)
+    label = "previous" if position == 0 else "current"
+
+    with pytest.raises(TypeError, match=f"{label} timestamp must be a datetime"):
+        elapsed_hours(*timestamps)
+
+
+@pytest.mark.parametrize("invalid", [None, "2026-11-02", 1, True, date(2026, 11, 2)])
+def test_sort_rejects_unsupported_timestamp_even_in_singleton(invalid: object):
+    observations = [cast(Observation, (invalid, Decimal(1)))]
+    original = observations.copy()
+
+    with pytest.raises(TypeError, match="index 0.*datetime"):
+        sort_observations(observations)
+
+    assert observations == original
+
+
+@pytest.mark.parametrize("index", [0, 1, 2])
+@pytest.mark.parametrize("invalid", [None, 1, (), (1,), (1, 2, 3)])
+def test_sort_reports_indexed_pair_errors_without_mutation(index: int, invalid: object):
+    observations = [
+        (datetime(2026, 11, 2, tzinfo=UTC), Decimal(2)),
+        (datetime(2026, 11, 1, tzinfo=UTC), Decimal(1)),
+    ]
+    observations.insert(index, cast(Observation, invalid))
+    original = observations.copy()
+
+    with pytest.raises(TypeError, match=f"index {index}.*timestamp/value pair"):
+        sort_observations(observations)
+
+    assert observations == original
+
+
+def test_sort_preserves_list_pairs_and_does_not_validate_kwh():
+    first = [datetime(2026, 11, 1, tzinfo=UTC), Decimal("NaN")]
+    second = [datetime(2026, 11, 2, tzinfo=UTC), Decimal(-1)]
+    result = sort_observations(cast(list[Observation], [second, first]))
+
+    assert result[0] is first
+    assert result[1] is second
+
+
+def test_sort_does_not_mask_outer_iterable_failure():
+    def broken_observations():
+        yield (datetime(2026, 11, 1, tzinfo=UTC), Decimal(1))
+        raise ValueError("source failed")
+
+    with pytest.raises(ValueError, match="source failed"):
+        sort_observations(broken_observations())
+
+
+def test_custom_timezone_errors_propagate():
+    class BrokenTimezone(tzinfo):
+        def utcoffset(self, dt):
+            raise RuntimeError("timezone failed")
+
+    timestamp = datetime(2026, 11, 1, tzinfo=BrokenTimezone())
+    with pytest.raises(RuntimeError, match="timezone failed"):
+        elapsed_hours(timestamp, datetime(2026, 11, 2, tzinfo=UTC))
+    with pytest.raises(RuntimeError, match="timezone failed"):
+        sort_observations([(timestamp, Decimal(1))])
+
+
+def test_elapsed_hours_preserves_microsecond_and_leap_day_duration():
+    previous = datetime(2024, 2, 28, 23, 59, 59, 999999, tzinfo=UTC)
+    current = datetime(2024, 2, 29, tzinfo=UTC)
+
+    assert elapsed_hours(previous, current) == pytest.approx(1e-6 / 3600)

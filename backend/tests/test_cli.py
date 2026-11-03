@@ -135,6 +135,26 @@ def test_cli_handles_incomplete_input_and_cancellation(
     [
         ("13007\n13049\n", 0, "42", ""),
         ("0.1\n0.3\n", 0, "0.2", ""),
+        ("13007.10\n13007.30\n", 0, "0.20", ""),
+        ("1e2\n1.42e2\n", 0, "42", ""),
+        (
+            "0\n1.2345678901234567890123456789\n",
+            2,
+            "",
+            "readings exceed supported decimal arithmetic limits",
+        ),
+        (
+            "0\n1e1000000\n",
+            2,
+            "",
+            "readings exceed supported decimal arithmetic limits",
+        ),
+        (
+            "0\n1e-1000027\n",
+            2,
+            "",
+            "readings exceed supported decimal arithmetic limits",
+        ),
         ("abc\n", 2, "", "previous reading must be a decimal number"),
         ("100\nNaN\n", 2, "", "current reading must be a finite number"),
         ("100\n99\n", 2, "", "current reading cannot be less than previous reading"),
