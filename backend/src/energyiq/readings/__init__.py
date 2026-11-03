@@ -13,6 +13,14 @@ from energyiq.readings.models import (
     ReadingSource,
     ReadingStatus,
 )
+from energyiq.readings.normalization import (
+    ConsumptionGap,
+    ConsumptionWindowSummary,
+    GapReason,
+    NormalizedInterval,
+    normalize_intervals,
+    summarize_consumption,
+)
 from energyiq.readings.ordering import (
     ReadingConflictEntry,
     ReadingOrderResult,
@@ -21,11 +29,15 @@ from energyiq.readings.ordering import (
 )
 
 __all__ = [
+    "ConsumptionGap",
     "ConsumptionInterval",
+    "ConsumptionWindowSummary",
+    "GapReason",
     "IntervalReason",
     "IntervalStatus",
     "MeterEvent",
     "MeterEventType",
+    "NormalizedInterval",
     "Reading",
     "ReadingConflictEntry",
     "ReadingOrderResult",
@@ -33,5 +45,7 @@ __all__ = [
     "ReadingStatus",
     "ReadingTimestampConflict",
     "compute_intervals",
+    "normalize_intervals",
     "order_readings",
+    "summarize_consumption",
 ]

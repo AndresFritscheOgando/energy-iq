@@ -21,6 +21,15 @@
 - no interpolating missing data into factual consumption.
 - mixed property or partially overlapping intervals not double-counted.
 
+## Property based tests (P1-05)
+`backend/tests/test_reading_properties.py` generates reading chains, events, windows, and cut points and runs them through the real `order_readings`, `compute_intervals`, and `summarize_consumption` code ([spec 0006](specs/0006-reading-chain-property-tests/index.md)). It checks ordering stability and conflict groups, the spec 0004 interval rules, exact window tiling (no hole, no overlap, exact kWh, single half even rounding, no floats), and additivity over 2 to 5 adjacent windows. Generators use a coarse time grid so collisions, 1 µs intervals, events on reading instants, and window bounds on or 1 µs from interval boundaries come up regularly.
+
+Profiles live in `backend/tests/conftest.py` and are chosen by `ENERGYIQ_HYPOTHESIS_PROFILE`:
+- `energyiq` (default): 200 examples per property, derandomized, no example database, no deadline, failure blob printed. Every run tries the same examples, so a red run means a code change (or a Hypothesis upgrade).
+- `deep` (opt in): 2000 random examples per property and the local example database in `.hypothesis/` (git ignored). Run with `ENERGYIQ_HYPOTHESIS_PROFILE=deep uv run pytest backend/tests/test_reading_properties.py`.
+
+Both profiles inherit from Hypothesis's built in default, so its automatic `ci` profile never changes local or CI behavior. An unknown profile name stops the session. No health check is suppressed. If a property finds a defect, pin the shrunk case as an `@example` and as a plain unit test in the matching test file.
+
 ## Bill extraction evaluations (Phase 4)
 Create a versioned labeled corpus of synthetic or authorized anonymized sample invoices; vary issuer/layout/scan quality/orientation/partial fields. Ground truth includes supplier, bill period, billed kWh, amount DOP, energy charge, other fees and field evidence. Metrics: field-level exact match/normalized accuracy, missing-field rate, false field rate, correction rate, document-level 'all required correct', processing latency, local memory cost. Split by layout to detect template overfitting. Save failure examples with redaction.
 
