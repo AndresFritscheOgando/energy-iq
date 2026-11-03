@@ -272,7 +272,7 @@ def test_sort_does_not_mask_outer_iterable_failure():
 
 def test_custom_timezone_errors_propagate():
     class BrokenTimezone(tzinfo):
-        def utcoffset(self, dt):
+        def utcoffset(self, dt: datetime | None) -> timedelta | None:
             raise RuntimeError("timezone failed")
 
     timestamp = datetime(2026, 11, 1, tzinfo=BrokenTimezone())

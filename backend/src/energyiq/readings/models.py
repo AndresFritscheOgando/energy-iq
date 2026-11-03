@@ -6,7 +6,7 @@ from decimal import Decimal
 from enum import StrEnum
 from uuid import UUID
 
-from energyiq.observations import _validate_utc_timestamp
+from energyiq.observations import validate_utc_timestamp
 
 _MAX_READING = Decimal("999999999999.999999")
 _MAX_FRACTIONAL_PLACES = 6
@@ -31,7 +31,7 @@ class MeterEventType(StrEnum):
     CALIBRATION = "calibration"
 
 
-def _validate_uuid(value: UUID, label: str) -> None:
+def validate_uuid(value: UUID, label: str) -> None:
     if not isinstance(value, UUID):
         raise TypeError(f"{label} must be a UUID")
 
@@ -86,13 +86,13 @@ class Reading:
     source_ref: str | None = None
 
     def __post_init__(self) -> None:
-        _validate_uuid(self.id, "id")
-        _validate_uuid(self.meter_id, "meter_id")
-        _validate_utc_timestamp(self.recorded_at, "recorded_at")
+        validate_uuid(self.id, "id")
+        validate_uuid(self.meter_id, "meter_id")
+        validate_utc_timestamp(self.recorded_at, "recorded_at")
         _validate_kwh(self.cumulative_kwh)
         _validate_enum(self.source, ReadingSource, "source")
         _validate_enum(self.status, ReadingStatus, "status")
-        _validate_utc_timestamp(self.created_at, "created_at")
+        validate_utc_timestamp(self.created_at, "created_at")
         if self.original_local_date is not None and (
             not isinstance(self.original_local_date, date)
             or isinstance(self.original_local_date, datetime)
@@ -116,15 +116,15 @@ class MeterEvent:
     approved_at: datetime | None = None
 
     def __post_init__(self) -> None:
-        _validate_uuid(self.id, "id")
-        _validate_uuid(self.meter_id, "meter_id")
+        validate_uuid(self.id, "id")
+        validate_uuid(self.meter_id, "meter_id")
         _validate_enum(self.event_type, MeterEventType, "event_type")
-        _validate_utc_timestamp(self.effective_at, "effective_at")
-        _validate_utc_timestamp(self.created_at, "created_at")
+        validate_utc_timestamp(self.effective_at, "effective_at")
+        validate_utc_timestamp(self.created_at, "created_at")
         _validate_optional_text(self.note, "note")
         if (self.approved_by is None) != (self.approved_at is None):
             raise ValueError("approved_by and approved_at must be provided together")
         if self.approved_by is not None:
-            _validate_uuid(self.approved_by, "approved_by")
+            validate_uuid(self.approved_by, "approved_by")
         if self.approved_at is not None:
-            _validate_utc_timestamp(self.approved_at, "approved_at")
+            validate_utc_timestamp(self.approved_at, "approved_at")

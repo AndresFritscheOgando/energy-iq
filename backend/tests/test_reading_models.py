@@ -58,7 +58,7 @@ def test_reading_keeps_exact_value_identity_and_provenance():
     assert reading.recorded_at == INSTANT
     assert reading.original_local_date == date(2026, 11, 3)
     with pytest.raises(FrozenInstanceError):
-        reading.status = ReadingStatus.VOIDED
+        reading.status = ReadingStatus.VOIDED  # pyright: ignore[reportAttributeAccessIssue]
 
 
 @pytest.mark.parametrize(
@@ -163,7 +163,7 @@ def test_event_preserves_kind_and_approval_metadata():
     assert event.approved_by == ACTOR_ID
     assert event.approved_at == INSTANT
     with pytest.raises(FrozenInstanceError):
-        event.event_type = MeterEventType.RESET
+        event.event_type = MeterEventType.RESET  # pyright: ignore[reportAttributeAccessIssue]
 
 
 @pytest.mark.parametrize("kind", list(MeterEventType))
