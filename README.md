@@ -1,6 +1,6 @@
 # EnergyIQ RD — Energy Intelligence Platform
 
-**Status:** Phase 0 is complete, including domain hardening and the local consumption CLI. The latest suite passed 166 tests. Phase 1 reading and meter event models are next.
+**Status:** Phase 0 is complete. Phase 1 P1-01 reading and meter event models are implemented. The latest suite passed 217 tests. Duplicate detection is next.
 **Delivery model:** The assistant acts as software architect and implementation engineer, delivering complete features, tests, and documentation.  
 **Goal:** Build a production-oriented, portfolio-quality electricity intelligence product for the Dominican Republic, through architect-led implementation following the product specifications and roadmap.
 
@@ -101,7 +101,7 @@ importable during tests. There is no distributable-package build configuration y
 Run `uv run python -m pytest`. The `-m` option runs pytest as a module through the
 selected Python interpreter. If Windows denies writes to `.pytest_cache`, run
 `uv run python -m pytest -q -p no:cacheprovider` to disable only the optional cache
-for that invocation. The latest verified suite contains 166 passing tests.
+for that invocation. The latest verified suite contains 217 passing tests.
 
 `uv run ruff check backend` checks common code issues.
 `uv run ruff format --check backend` checks formatting without changing files.
@@ -142,8 +142,20 @@ Consumption arithmetic uses precision 28 with `Emin=-999999` and `Emax=999999`.
 Results that would lose numeric precision, overflow, or underflow fail clearly;
 the function never returns a silently rounded consumption value. Exact very small
 results are permitted through `1e-1000026`. Ordinary fractional output such as
-`0.20` is preserved. This computation policy is separate from the reading scale
-and physical ranges that later domain models will define. Direct Python callers
+`0.20` is preserved. This computation policy is separate from the Phase 1
+reading scale and bound. Direct Python callers
 must supply Decimal objects, including for whole numbers; elapsed time helpers
 require datetime objects with zero UTC offsets. See the
 [hardening spec](docs/specs/0001-phase-zero-domain-hardening.md) for the contract.
+
+## Phase 1 reading records
+
+`energyiq.readings` provides immutable `Reading` and `MeterEvent` dataclasses.
+They require UUID identities, explicit UTC instants, and enum values for source,
+status, or event kind. Cumulative kWh is a finite nonnegative `Decimal` with at
+most six meaningful fractional places and a maximum of
+`999999999999.999999`. Validation does not round or alter the caller's Decimal
+context. An optional original local date records provenance but never supplies
+an inferred UTC instant. Event approval actor and time must appear together.
+These records do not sort readings, reject duplicates, apply event boundaries,
+or persist data. See the [P1-01 spec](docs/specs/0002-reading-meter-event-models.md).

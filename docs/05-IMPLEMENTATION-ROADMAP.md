@@ -29,7 +29,7 @@ The final review covered every Phase 0 source and test file. Exact arithmetic,
 runtime validation, UTC ordering, and real CLI subprocess behavior are verified.
 See [progress](PROGRESS.md) for commands, evidence, and remaining limits.
 
-- P1-01 Define reading and meter event models using type hints/dataclasses.
+- P1-01 Complete on 2026-11-03: validated typed reading and meter event dataclasses, 217 passing tests, Ruff checks and explicit project Pyright check passed. See [spec 0002](specs/0002-reading-meter-event-models.md).
 - P1-02 Implement stable sorting and duplicate detection.
 - P1-03 Compute intervals from ordered readings, with reset/replacement boundary rules.
 - P1-04 Compute time-normalized consumption; characterize missing intervals.
