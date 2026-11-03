@@ -3,7 +3,7 @@
 ## Entities / important fields
 - `User`: id UUID, email normalized/unique, password_hash or external subject, created_at, disabled_at.
 - `Property`: id UUID, owner_user_id FK, nickname, optional region, timezone (`America/Santo_Domingo` default), timestamps.
-- `Meter`: id UUID, property_id FK, utility_distributor enum/code (EDESUR/EDEESTE/EDENORTE/OTHER), meter_label, reading_unit `kWh`, installation/replacement metadata, active flag.
+- `Meter`: id UUID, property_id FK, utility_distributor enum/code (EDESUR/EDEESTE/EDENORTE/OTHER), meter_label, reading_unit `kWh`, installation/replacement metadata, active flag. From Phase 2, replacing a physical meter creates a new Meter record (the old one gets a final reading and becomes inactive; the new one gets an approved `installed` event and a first reading); see [ADR-006](adr/ADR-006-meter-replacement-new-record.md). A register digit count, needed for rollover kWh, is designed in Phase 2.
 - `MeterEvent`: id, meter_id, event_type (`installed`, `reset`, `replaced`, `rollover`, `calibration`), effective_at, approved metadata; separates discontinuities.
 - `Reading`: id, meter_id, recorded_at UTC, original_local_date if manually entered, cumulative_kwh `Decimal`, source (`manual`, `import`), status (`valid`, `flagged`, `voided`), created_at, source_ref/idempotency_key.
 - The P1-01 in-memory `Reading` model uses UUID ids, explicit aware zero-offset datetimes, and finite nonnegative Decimal kWh up to `999999999999.999999` with at most six meaningful fractional places. It never rounds. `original_local_date` is optional provenance, not a substitute for `recorded_at`. See [spec 0002](specs/0002-reading-meter-event-models.md).
@@ -24,7 +24,7 @@
 ## Invariants
 1. Reading values >= 0, valid decimal scale. Readings within one stable meter segment must not decrease. A decrease requires a documented meter event and recomputation; don't simply discard.
 2. UTC timestamps for event storage and interval calculations; user-facing dates in property timezone. Equal timestamps for same meter must be rejected or explicitly reconciled.
-3. Consumption = next cumulative reading - previous, only within a compatible segment. Time-normalize for daily rates by actual elapsed interval, not by assuming each pair is 24 hours apart.
+3. Consumption = next cumulative reading - previous, only within a compatible segment. Time-normalize for daily rates by actual elapsed interval, not by assuming each pair is 24 hours apart. Discontinuity rules, their precedence, and worked examples are in [meter semantics](12-METER-SEMANTICS.md).
 4. Bills are not meter readings. Billed periods may not match observation windows; reconciliation shows coverage and limitations.
 5. No overlapping active intervals for the same tariff rule scope; rates only applied to appropriate effective dates and customer category. Tariff complexity is domain-specific; require authoritative tariff fixtures before coding.
 6. Money stored as `Decimal` or integer centavos, currency included; rounding declared and tested.

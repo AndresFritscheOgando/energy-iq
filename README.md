@@ -30,7 +30,7 @@
 | Data | PostgreSQL (planned) |
 | Frontend | Next.js (planned) |
 | AI | Local Ollama behind a provider abstraction (planned) |
-| Tooling | `uv`, pytest, Ruff, Pyright (strict) |
+| Tooling | `uv`, pytest, Hypothesis (property tests), Ruff, Pyright (strict) |
 
 ## Quickstart
 
@@ -93,7 +93,9 @@ All code lives in [`backend/src/energyiq`](backend/src/energyiq). Tests live in 
 | `readings.compute_intervals` | Builds consumption intervals and marks an interval invalid, with a reason, when it crosses a meter event, a flagged reading, or a decrease. | [spec 0004](docs/specs/0004-reading-interval-boundaries/index.md) |
 | `readings.normalize_intervals`, `readings.summarize_consumption` | Turns intervals into kWh per day using real elapsed time, and summarizes a time window: measured kWh, how much of the window is covered, and a typed gap for every span with missing data. Nothing is estimated. | [spec 0005](docs/specs/0005-time-normalized-consumption-coverage/index.md) |
 
-**Next up:** property based domain tests (P1-05).
+Property based tests (P1-05, [spec 0006](docs/specs/0006-reading-chain-property-tests/index.md)) check ordering, interval rules, window tiling, and additivity across generated reading chains. Set `ENERGYIQ_HYPOTHESIS_PROFILE=deep` for a wider random search.
+
+**Next up:** Phase 2, starting with the minimal FastAPI application (P2-01). Reading semantics and discontinuity rules are documented in [12-METER-SEMANTICS](docs/12-METER-SEMANTICS.md) (P1-06).
 
 ## Documentation
 
@@ -103,6 +105,7 @@ All code lives in [`backend/src/energyiq`](backend/src/energyiq). Tests live in 
 | Architecture | [02-ARCHITECTURE](docs/02-ARCHITECTURE.md) |
 | Tech stack decisions | [03-TECH-STACK](docs/03-TECH-STACK.md) |
 | Data model and API | [04-DATA-MODEL-API](docs/04-DATA-MODEL-API.md) |
+| Meter semantics and discontinuity rules | [12-METER-SEMANTICS](docs/12-METER-SEMANTICS.md) |
 | Roadmap and phase gates | [05-IMPLEMENTATION-ROADMAP](docs/05-IMPLEMENTATION-ROADMAP.md) |
 | User stories | [06-USER-STORIES](docs/06-USER-STORIES.md) |
 | Testing and AI evaluations | [07-TESTING-EVALUATIONS](docs/07-TESTING-EVALUATIONS.md) |
@@ -110,7 +113,3 @@ All code lives in [`backend/src/energyiq`](backend/src/energyiq). Tests live in 
 | AI design (Ollama, RAG, MCP) | [10-AI-DESIGN](docs/10-AI-DESIGN.md) |
 | Decisions and open questions | [11-DECISIONS-OPEN-QUESTIONS](docs/11-DECISIONS-OPEN-QUESTIONS.md), [ADRs](docs/adr/) |
 | Progress log | [PROGRESS](docs/PROGRESS.md) |
-
-## How this project is built
-
-This is a portfolio project, not a commercial product. It is built with an AI coding agent acting as architect and implementation engineer under a written contract: [`AGENTS.md`](AGENTS.md) and the [engineering contract](docs/09-ENGINEERING-CONTRACT.md). Each roadmap ticket gets a spec, tests, review, and a [progress](docs/PROGRESS.md) entry that records only the checks that were actually run. The project does not claim tests pass unless they were run.
