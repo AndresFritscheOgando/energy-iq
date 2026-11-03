@@ -91,8 +91,9 @@ All code lives in [`backend/src/energyiq`](backend/src/energyiq). Tests live in 
 | `readings` models | Immutable, validated `Reading` and `MeterEvent` records with UUIDs, UTC instants, and bounded `Decimal` kWh. | [spec 0002](docs/specs/0002-reading-meter-event-models.md) |
 | `readings.order_readings` | Sorts one meter's readings and reports any duplicate-timestamp conflicts. | [spec 0003](docs/specs/0003-reading-order-conflicts.md) |
 | `readings.compute_intervals` | Builds consumption intervals and marks an interval invalid, with a reason, when it crosses a meter event, a flagged reading, or a decrease. | [spec 0004](docs/specs/0004-reading-interval-boundaries/index.md) |
+| `readings.normalize_intervals`, `readings.summarize_consumption` | Turns intervals into kWh per day using real elapsed time, and summarizes a time window: measured kWh, how much of the window is covered, and a typed gap for every span with missing data. Nothing is estimated. | [spec 0005](docs/specs/0005-time-normalized-consumption-coverage/index.md) |
 
-**Next up:** time normalization and coverage (P1-04).
+**Next up:** property based domain tests (P1-05).
 
 ## Documentation
 

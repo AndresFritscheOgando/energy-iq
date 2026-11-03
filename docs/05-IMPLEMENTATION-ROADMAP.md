@@ -32,8 +32,8 @@ See [progress](PROGRESS.md) for commands, evidence, and remaining limits.
 - P1-01 Complete on 2026-11-03: validated typed reading and meter event dataclasses, 217 passing tests, Ruff checks and explicit project Pyright check passed. See [spec 0002](specs/0002-reading-meter-event-models.md).
 - P1-02 Complete on 2026-11-03: stable typed reading ordering and complete duplicate timestamp conflict groups. Further contract tests brought the full suite to 231 passing tests. See [spec 0003](specs/0003-reading-order-conflicts.md).
 - P1-03 Complete on 2026-11-03: pure interval calculation from conflict free ordered readings, with explicit valid and invalid results for resets, replacements, unapproved or unsupported events, flagged readings, and unexplained decreases. Full suite 254 passed after further boundary tests; Ruff and explicit project Pyright passed. See [spec 0004](specs/0004-reading-interval-boundaries/index.md).
-- P1-04 Compute time-normalized consumption; characterize missing intervals.
-- P1-05 Property-based/invariant tests as optional advanced challenge.
+- P1-04 Complete on 2026-11-03: per interval kWh per day from exact elapsed time, and an exact window summary with measured kWh, coverage, average rate, and typed gaps; no estimation or floats. 49 new tests; full suite 303 passed. Ruff and Pyright passed. `/check verify` passed all eight acceptance criteria, and a fresh model review approved it with nits ([review](reviews/2026-11-03-features-p1-04.md)). See [spec 0005](specs/0005-time-normalized-consumption-coverage/index.md).
+- P1-05 Property based invariant tests over generated reading and interval chains: ordering stability, interval boundary rules, exact window tiling (measured intervals plus gaps cover the window with no hole or overlap), and additivity (summaries of adjacent windows never count the same interval twice). Decide whether a test dependency such as Hypothesis is justified before adding it.
 - P1-06 Document cumulative vs incremental meter semantics, discontinuity rules, and operational trade-offs.
 
 ## Phase 2 tickets
