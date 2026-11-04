@@ -45,6 +45,13 @@ class RequestContextMiddleware:
     once with the request id, a 500 problem is sent if the response has not
     started, and nothing is re raised. On a client disconnect before the
     response starts, nothing is sent and the access status is 499.
+
+    A failure after the response started cannot be answered: the body stays
+    truncated (a closing body message would make it look complete), and
+    uvicorn then logs its own "ASGI callable returned without completing
+    response" line with no request id. Our entry for that case reads
+    ``unhandled exception after response started`` so the two lines can be
+    matched by time; it is the one that carries the request id.
     """
 
     def __init__(self, app: ASGIApp) -> None:
@@ -86,7 +93,10 @@ class RequestContextMiddleware:
             await self.app(scope, tracking_receive, tagging_send)
         except Exception:  # noqa: BLE001 - this layer owns every unhandled error
             _error_log.exception(
-                "unhandled exception", extra={"request_id": request_id}
+                "unhandled exception after response started"
+                if response_started
+                else "unhandled exception",
+                extra={"request_id": request_id},
             )
             if disconnected and not response_started:
                 status = CLIENT_CLOSED_REQUEST

@@ -185,7 +185,10 @@ def test_error_after_response_started_sends_nothing_more(
     assert result.body == b"first"
     assert [m["type"] for m in result.messages].count("http.response.start") == 1
     assert not any(b"internal_error" in m.get("body", b"") for m in result.messages)
-    assert len([r for r in log_records if r.name == "energyiq.errors"]) == 1
+    errors = [r for r in log_records if r.name == "energyiq.errors"]
+    assert [r.getMessage() for r in errors] == [
+        "unhandled exception after response started"
+    ]
     assert [a["status"] for a in access(log_records)] == [200]
 
 
