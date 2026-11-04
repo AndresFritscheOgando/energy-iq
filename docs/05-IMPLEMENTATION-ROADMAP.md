@@ -40,10 +40,10 @@ Phase 1 gate passed on 2026-11-03: correct interval and coverage handling is imp
 
 ## Phase 2 tickets
 - P2-01 Implement the minimal FastAPI application with request/response schemas and explicit HTTP error semantics. Built 2026-11-04 from [spec 0008](specs/0008-minimal-fastapi-application/index.md): `GET /health` and stateless `POST /api/v1/consumption/summary`, problem details errors, request ids, JSON access log, body caps, settings, CORS, OpenAPI snapshot. `/check verify` not run yet.
-- P2-02 Add PostgreSQL Compose service, SQLAlchemy mappings, Alembic migration; justify constraints.
-- P2-03 Add authenticated ownership context and property/meter CRUD.
-- P2-04 Add readings API with transaction and idempotency behavior.
-- P2-05 Test cross-user access, duplicate request, migration upgrade/downgrade.
+- P2-02 Add PostgreSQL Compose service, SQLAlchemy mappings, Alembic migration; justify constraints. Designed 2026-11-04 in [spec 0009](specs/0009-phase-two-persistence-auth/index.md), child [0001](specs/0009-phase-two-persistence-auth/0001-database-foundation.md). Built 2026-11-04: Compose PostgreSQL 18.6, two roles, revision `0001` with named constraints and column grants, `GET /health/ready`, savepoint test fixtures. `/check verify` passed 2026-11-04 (all 9 ACs).
+- P2-03 Add authenticated ownership context and property/meter CRUD. Designed 2026-11-04 in [spec 0009](specs/0009-phase-two-persistence-auth/index.md), child [0002](specs/0009-phase-two-persistence-auth/0002-identity-properties-meters.md); not built.
+- P2-04 Add readings API with transaction and idempotency behavior. Designed 2026-11-04 in [spec 0009](specs/0009-phase-two-persistence-auth/index.md), child [0003](specs/0009-phase-two-persistence-auth/0003-readings-events-api.md); not built.
+- P2-05 Test cross-user access, duplicate request, migration upgrade/downgrade. Designed 2026-11-04 in [spec 0009](specs/0009-phase-two-persistence-auth/index.md), child [0004](specs/0009-phase-two-persistence-auth/0004-phase-two-gate-tests.md); not built.
 
 ## Phase 3 tickets
 - P3-01 Next.js setup, typed API layer and session strategy.

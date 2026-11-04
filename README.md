@@ -27,7 +27,7 @@
 | Layer | Choice |
 |---|---|
 | Domain and backend | Python 3.13, FastAPI, modular monolith |
-| Data | PostgreSQL (planned) |
+| Data | PostgreSQL 18 (Docker Compose), SQLAlchemy 2 (sync) over psycopg 3, Alembic |
 | Frontend | Next.js (planned) |
 | AI | Local Ollama behind a provider abstraction (planned) |
 | Tooling | `uv`, pytest, Hypothesis (property tests), httpx2 (API tests), Ruff, Pyright (strict) |
@@ -92,6 +92,21 @@ Invoke-RestMethod -Method Post -Uri http://127.0.0.1:8000/api/v1/consumption/sum
 
 kWh values travel as decimal strings in both directions, timestamps need an explicit offset and come back as UTC `Z` text, and every error is `application/problem+json` with a stable `code`. Settings: `ENERGYIQ_ENV` (`dev`, `test`, `prod`), `ENERGYIQ_MAX_BODY_BYTES`, `ENERGYIQ_CORS_ORIGINS` (JSON list), `ENERGYIQ_LOG_LEVEL`. See [spec 0008](docs/specs/0008-minimal-fastapi-application/index.md).
 
+### Run the database
+
+You need Docker with Compose. The database listens on `127.0.0.1:5432` only. The first start creates two roles (`energyiq_migrator` owns the schema, `energyiq_app` is what the API uses) and two databases (`energyiq_dev`, `energyiq_test`).
+
+```powershell
+Copy-Item infra/.env.example infra/.env        # synthetic local passwords; infra/.env is git-ignored
+docker compose -f infra/compose.yaml up -d db   # start PostgreSQL 18 and wait for "healthy"
+uv run alembic upgrade head                      # migrate energyiq_dev as the migrator role
+uv run alembic check                             # confirm the ORM and the schema agree
+```
+
+`alembic downgrade base` removes every table. To migrate the test database by hand, set `$env:ENERGYIQ_ENV = "test"` first. The `dev` and `test` settings default to the values in `infra/.env.example`, so a local run needs no extra variables. With `ENERGYIQ_ENV=prod`, `ENERGYIQ_DATABASE_URL`, `ENERGYIQ_MIGRATION_DATABASE_URL`, and `ENERGYIQ_SECRET_KEY` (at least 32 characters) are required. Optional: `ENERGYIQ_DB_POOL_SIZE` (1 to 50, default 5) and `ENERGYIQ_DB_STATEMENT_TIMEOUT_MS` (100 to 60000, default 5000).
+
+The API still starts without a database. `GET /health` never touches it. `GET /health/ready` answers 200 with the schema revision when the database is reachable and migrated, or a 503 problem with code `database_unavailable` or `schema_out_of_date`. To start over with a fresh volume, run `docker compose -f infra/compose.yaml down -v`.
+
 ### Quality checks
 
 ```powershell
@@ -99,6 +114,12 @@ uv run python -m pytest -q    # tests (add -p no:cacheprovider if Windows blocks
 uv run ruff check .           # lint
 uv run ruff format --check .  # formatting
 uv run pyright                # strict type checking
+```
+
+Tests marked `db` run against `energyiq_test`. The session migrates it to head once, and every test runs in a transaction that is rolled back. Without a reachable database those tests are skipped and the reason is printed (`PostgreSQL not reachable at 127.0.0.1:5432/energyiq_test`), so the default run still passes. To make a missing database fail the run instead (for CI or before you merge), set the variable first:
+
+```powershell
+$env:ENERGYIQ_REQUIRE_DB = "1"; uv run python -m pytest -q; Remove-Item Env:ENERGYIQ_REQUIRE_DB
 ```
 
 ## What's implemented so far
@@ -115,11 +136,12 @@ All code lives in [`backend/src/energyiq`](backend/src/energyiq). Tests live in 
 | `readings.compute_intervals` | Builds consumption intervals and marks an interval invalid, with a reason, when it crosses a meter event, a flagged reading, or a decrease. | [spec 0004](docs/specs/0004-reading-interval-boundaries/index.md) |
 | `readings.normalize_intervals`, `readings.summarize_consumption` | Turns intervals into kWh per day using real elapsed time, and summarizes a time window: measured kWh, how much of the window is covered, and a typed gap for every span with missing data. Nothing is estimated. | [spec 0005](docs/specs/0005-time-normalized-consumption-coverage/index.md) |
 
+| `platform.db`, `platform.http.ready`, ORM rows, `backend/alembic` | PostgreSQL foundation: a lazy engine (UTC, statement timeout), per request sessions, revision `0001` with the core tables and named constraints, column level grants for the app role, `GET /health/ready`, and 503 `database_unavailable` for connection, pool, and statement timeouts. No user data routes yet. | [spec 0009/0001](docs/specs/0009-phase-two-persistence-auth/0001-database-foundation.md) |
 | `main`, `platform`, `readings.api` | FastAPI app: `GET /health` and the stateless `POST /api/v1/consumption/summary`, with problem details errors, request ids, a JSON access log, body caps, settings, and CORS. | [spec 0008](docs/specs/0008-minimal-fastapi-application/index.md) |
 
 Property based tests (P1-05, [spec 0006](docs/specs/0006-reading-chain-property-tests/index.md)) check ordering, interval rules, window tiling, and additivity across generated reading chains. Set `ENERGYIQ_HYPOTHESIS_PROFILE=deep` for a wider random search.
 
-**Next up:** P2-02, PostgreSQL with SQLAlchemy mappings and an Alembic migration. Reading semantics and discontinuity rules are documented in [12-METER-SEMANTICS](docs/12-METER-SEMANTICS.md) (P1-06).
+**Next up:** P2-03, accounts with cookie sessions and owner scoped properties and meters ([spec 0009/0002](docs/specs/0009-phase-two-persistence-auth/0002-identity-properties-meters.md)). Reading semantics and discontinuity rules are documented in [12-METER-SEMANTICS](docs/12-METER-SEMANTICS.md) (P1-06).
 
 ## Documentation
 

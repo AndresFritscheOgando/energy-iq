@@ -46,6 +46,7 @@ These are local function contracts, not HTTP endpoints. P2-01 maps them to HTTP
 | Method/path | Purpose | Phase |
 |---|---|---|
 | `GET /health` (unversioned) | Liveness and version, no dependencies | 2 (P2-01, built) |
+| `GET /health/ready` (unversioned, public) | 200 `{"status": "ready", "schema_revision": "<head>"}` when the database answers within 2 s and its Alembic revision is the code's head; else 503 | 2 (P2-02, built) |
 | `POST /consumption/summary` | Stateless window summary over posted readings and events; stores nothing, no auth yet | 2 (P2-01, built) |
 | `POST /auth/login`, `POST /auth/logout`, `GET /auth/me` | Auth/session | 2 |
 | `GET/POST /properties`, `GET/PATCH/DELETE /properties/{id}` | Owner-scoped properties | 2 |
@@ -90,6 +91,8 @@ Set by [spec 0008](specs/0008-minimal-fastapi-application/index.md); every later
 | 422 | `reading_timestamp_conflict` | readings share a UTC instant (all statuses) | `conflicts[]` of `{recorded_at, entries[{input_index, reading_id, status}]}` |
 | other | `http_<status>` | any other `HTTPException` | |
 | 500 | `internal_error` | anything unexpected; generic detail, traceback logged once with the request id | |
+| 503 | `database_unavailable` | connection failure, pool checkout timeout, or statement timeout (`OperationalError`, pool `TimeoutError`); one warning line with the request id and the exception class only, never the DSN or SQL (P2-02) | |
+| 503 | `schema_out_of_date` | readiness only: `alembic_version` is missing, empty, unreadable, or not the code's head (P2-02) | |
 
 Checks run in a fixed order and the first failure answers: schema, duplicate ids, mapping, timestamp conflicts, computation. Validation `errors[].code` values come from a fixed catalog (`missing`, `unknown_field`, `invalid_type`, `invalid_uuid`, `invalid_kwh`, `invalid_datetime`, `datetime_out_of_range`, `invalid_enum`, `too_many_items`, `window_order`, `approval_pair`, `invalid_value`) and never echo the submitted value. 409 is reserved for stored state conflicts (P2-04); 401, 403, and 429 arrive with P2-03.
 
