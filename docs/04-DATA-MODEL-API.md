@@ -40,11 +40,13 @@ policy, or raises a Decimal arithmetic exception. It rejects unsupported runtime
 types and does not coerce whole numbers, floats, or strings. This computation
 policy is independent of future reading storage scale and physical range rules.
 Elapsed time and sorting require datetime timestamps with zero UTC offsets.
-These are local function contracts, not HTTP endpoints; API error mapping remains
-Phase 2 work. See [Task 001](tasks/TASK-001-consumption-foundations.md).
+These are local function contracts, not HTTP endpoints. P2-01 maps them to HTTP
+([spec 0008](specs/0008-minimal-fastapi-application/index.md)); see HTTP error semantics below. See [Task 001](tasks/TASK-001-consumption-foundations.md).
 
 | Method/path | Purpose | Phase |
 |---|---|---|
+| `GET /health` (unversioned) | Liveness and version, no dependencies | 2 (P2-01, built) |
+| `POST /consumption/summary` | Stateless window summary over posted readings and events; stores nothing, no auth yet | 2 (P2-01, built) |
 | `POST /auth/login`, `POST /auth/logout`, `GET /auth/me` | Auth/session | 2 |
 | `GET/POST /properties`, `GET/PATCH/DELETE /properties/{id}` | Owner-scoped properties | 2 |
 | `GET/POST /properties/{id}/meters` | Meter management | 2 |
@@ -64,6 +66,32 @@ Phase 2 work. See [Task 001](tasks/TASK-001-consumption-foundations.md).
 - Pagination, UTC ISO timestamps, decimal serialization policy, correlation IDs, idempotency for uploads and jobs.
 - Rate limits and payload limits on all write/AI endpoints.
 - Document OpenAPI and maintain sample request/response fixtures alongside endpoint implementation and contract tests.
+
+## HTTP conventions and error semantics (P2-01, implemented)
+
+Set by [spec 0008](specs/0008-minimal-fastapi-application/index.md); every later endpoint reuses them.
+
+- **Values.** kWh, rates, and ratios are JSON strings: input matches `^[0-9]{1,12}(\.[0-9]{1,6})?$`, output is `format(value, "f")` of the exact Decimal. Input timestamps are JSON strings with an explicit offset, converted to UTC. Output timestamps are `YYYY-MM-DDTHH:MM:SS[.ffffff]Z`. Durations are ISO 8601 (`P1DT2H30M`, `PT0S`). Nullable fields are always present.
+- **Server owned fields.** `created_at` is stamped by the server from one injected clock instant per request; clients cannot send it. Unknown fields are rejected everywhere.
+- **Errors.** Every non 2xx response is `application/problem+json` (RFC 9457): `type` (`about:blank`), `title` (reason phrase), `status`, `detail` (fixed per code), `code`, `request_id`. Clients branch on `code`, never on `detail`. Two exceptions are answered before the app runs: Starlette's plain 400 for a rejected CORS preflight, and uvicorn's plain 400 for a request its HTTP parser rejects (for example a non integer `Content-Length`).
+- **Tracing.** Every response carries `X-Request-ID` (a valid client value `^[A-Za-z0-9-]{1,64}$` is echoed, else a new UUID4). Each request writes one JSON access line (`timestamp`, `level`, `request_id`, `method`, `route`, `status`, `duration_ms`) on `energyiq.access`; no body, query, header value, or client address is logged.
+- **Limits.** Bodies over `ENERGYIQ_MAX_BODY_BYTES` (default 1 MiB) are rejected, declared or streamed. Lists are capped at 5,000 readings and 500 events.
+
+| Status | `code` | When | Extension member |
+|---|---|---|---|
+| 400 | `malformed_json` | unparseable JSON, invalid UTF-8, or empty body on a JSON route | |
+| 400 | `invalid_content_length` | `Content-Length` is not a non negative integer and the request reaches the app (defense in depth; uvicorn's parser normally rejects it first with a plain 400) | |
+| 404 | `not_found` | no route matches | |
+| 405 | `method_not_allowed` | route exists, method does not (`Allow` header kept) | |
+| 413 | `payload_too_large` | body over the byte cap | |
+| 415 | `unsupported_media_type` | JSON route without `application/json` (only `charset=utf-8` allowed) | |
+| 422 | `validation_error` | schema or field rule failed | `errors[]` of `{loc, code, message}`, first 100, plus `errors_truncated` |
+| 422 | `duplicate_id` | repeated id within readings or within events | `duplicates[]` of `{collection, id, input_indexes}` |
+| 422 | `reading_timestamp_conflict` | readings share a UTC instant (all statuses) | `conflicts[]` of `{recorded_at, entries[{input_index, reading_id, status}]}` |
+| other | `http_<status>` | any other `HTTPException` | |
+| 500 | `internal_error` | anything unexpected; generic detail, traceback logged once with the request id | |
+
+Checks run in a fixed order and the first failure answers: schema, duplicate ids, mapping, timestamp conflicts, computation. Validation `errors[].code` values come from a fixed catalog (`missing`, `unknown_field`, `invalid_type`, `invalid_uuid`, `invalid_kwh`, `invalid_datetime`, `datetime_out_of_range`, `invalid_enum`, `too_many_items`, `window_order`, `approval_pair`, `invalid_value`) and never echo the submitted value. 409 is reserved for stored state conflicts (P2-04); 401, 403, and 429 arrive with P2-03.
 
 ## Model of one reading (illustrative schema only)
 ```json

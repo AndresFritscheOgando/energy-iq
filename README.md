@@ -26,11 +26,11 @@
 
 | Layer | Choice |
 |---|---|
-| Domain and backend | Python 3.13, FastAPI (planned), modular monolith |
+| Domain and backend | Python 3.13, FastAPI, modular monolith |
 | Data | PostgreSQL (planned) |
 | Frontend | Next.js (planned) |
 | AI | Local Ollama behind a provider abstraction (planned) |
-| Tooling | `uv`, pytest, Hypothesis (property tests), Ruff, Pyright (strict) |
+| Tooling | `uv`, pytest, Hypothesis (property tests), httpx2 (API tests), Ruff, Pyright (strict) |
 
 ## Quickstart
 
@@ -70,6 +70,28 @@ uv sync
 These variables last only for the current terminal session. `.venv`, `.cache`, and `.local-python` are git-ignored.
 </details>
 
+### Run the API server
+
+```powershell
+uv run uvicorn energyiq.main:create_app --factory --app-dir backend/src --no-access-log
+```
+
+The server listens on `http://127.0.0.1:8000`. Interactive docs are at `/docs` (hidden when `ENERGYIQ_ENV=prod`). It stores nothing and has no login yet, so keep it on localhost and use synthetic data only. Try a summary:
+
+```powershell
+$body = @{
+  meter_id = "00000000-0000-4000-8000-000000000001"
+  window   = @{ start = "2026-10-01T00:00:00-04:00"; end = "2026-10-04T00:00:00Z" }
+  readings = @(
+    @{ id = "00000000-0000-4000-8000-0000000000a1"; recorded_at = "2026-10-01T16:00:00Z"; cumulative_kwh = "13007.10" }
+    @{ id = "00000000-0000-4000-8000-0000000000a2"; recorded_at = "2026-10-02T16:00:00Z"; cumulative_kwh = "13019.35" }
+  )
+} | ConvertTo-Json -Depth 4
+Invoke-RestMethod -Method Post -Uri http://127.0.0.1:8000/api/v1/consumption/summary -ContentType application/json -Body $body
+```
+
+kWh values travel as decimal strings in both directions, timestamps need an explicit offset and come back as UTC `Z` text, and every error is `application/problem+json` with a stable `code`. Settings: `ENERGYIQ_ENV` (`dev`, `test`, `prod`), `ENERGYIQ_MAX_BODY_BYTES`, `ENERGYIQ_CORS_ORIGINS` (JSON list), `ENERGYIQ_LOG_LEVEL`. See [spec 0008](docs/specs/0008-minimal-fastapi-application/index.md).
+
 ### Quality checks
 
 ```powershell
@@ -93,9 +115,11 @@ All code lives in [`backend/src/energyiq`](backend/src/energyiq). Tests live in 
 | `readings.compute_intervals` | Builds consumption intervals and marks an interval invalid, with a reason, when it crosses a meter event, a flagged reading, or a decrease. | [spec 0004](docs/specs/0004-reading-interval-boundaries/index.md) |
 | `readings.normalize_intervals`, `readings.summarize_consumption` | Turns intervals into kWh per day using real elapsed time, and summarizes a time window: measured kWh, how much of the window is covered, and a typed gap for every span with missing data. Nothing is estimated. | [spec 0005](docs/specs/0005-time-normalized-consumption-coverage/index.md) |
 
+| `main`, `platform`, `readings.api` | FastAPI app: `GET /health` and the stateless `POST /api/v1/consumption/summary`, with problem details errors, request ids, a JSON access log, body caps, settings, and CORS. | [spec 0008](docs/specs/0008-minimal-fastapi-application/index.md) |
+
 Property based tests (P1-05, [spec 0006](docs/specs/0006-reading-chain-property-tests/index.md)) check ordering, interval rules, window tiling, and additivity across generated reading chains. Set `ENERGYIQ_HYPOTHESIS_PROFILE=deep` for a wider random search.
 
-**Next up:** Phase 2, starting with the minimal FastAPI application (P2-01). Reading semantics and discontinuity rules are documented in [12-METER-SEMANTICS](docs/12-METER-SEMANTICS.md) (P1-06).
+**Next up:** P2-02, PostgreSQL with SQLAlchemy mappings and an Alembic migration. Reading semantics and discontinuity rules are documented in [12-METER-SEMANTICS](docs/12-METER-SEMANTICS.md) (P1-06).
 
 ## Documentation
 

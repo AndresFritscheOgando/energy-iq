@@ -6,7 +6,7 @@
 | Language | Python 3.13 target, validate dependency compatibility before pin | Modern typing; reproducible runtime and dependency compatibility |
 | Python tooling | `uv` for environment/package management; `ruff` for lint/format; `mypy` or `pyright` later | Repeatable, explicit engineering workflow |
 | Tests | `pytest`, `hypothesis>=6.170` (dev only, locked at 6.170.14), `pytest-asyncio` where needed, coverage plugin | Simple unit + async test capabilities; Hypothesis property tests with shrinking for reading chain invariants ([spec 0006](specs/0006-reading-chain-property-tests/index.md)) |
-| API | FastAPI + Pydantic v2 | Typed HTTP APIs, validation |
+| API | `fastapi>=0.162.0` (locked 0.162.0, with Starlette 1.10.0 and Pydantic 2.14.2), `uvicorn>=0.54.0` (locked 0.54.0), `pydantic-settings>=2.16.2` (locked 2.16.2); `httpx2>=2.16.0` dev only (locked 2.16.0) | Typed HTTP APIs, validation, `ENERGYIQ_*` settings; `httpx2` is the client Starlette 1.10 `TestClient` expects (plain `httpx` is deprecated there and leaves `TestClient` untyped). Upgrading FastAPI can change the committed OpenAPI snapshot ([spec 0008](specs/0008-minimal-fastapi-application/index.md)) |
 | Database | PostgreSQL (version pinned at implementation), SQLAlchemy 2.x, Alembic | Relational integrity, migrations |
 | Frontend | Next.js with TypeScript, App Router; charting package selected at UI phase | Responsive full stack |
 | Auth | Server-managed session with HttpOnly secure cookie (default proposal), CSRF strategy; ADR before implementation | Avoid token storage in localStorage |

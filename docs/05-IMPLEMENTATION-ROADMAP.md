@@ -39,7 +39,7 @@ See [progress](PROGRESS.md) for commands, evidence, and remaining limits.
 Phase 1 gate passed on 2026-11-03: correct interval and coverage handling is implemented and tested (P1-01 to P1-05 each passed `/check verify`; P1-05 under [spec 0006](specs/0006-reading-chain-property-tests/verify.md)), and the semantics are documented with tested examples (P1-06). Full suite 325 passed; Ruff, format, and Pyright passed.
 
 ## Phase 2 tickets
-- P2-01 Implement the minimal FastAPI application with request/response schemas and explicit HTTP error semantics.
+- P2-01 Implement the minimal FastAPI application with request/response schemas and explicit HTTP error semantics. Built 2026-11-04 from [spec 0008](specs/0008-minimal-fastapi-application/index.md): `GET /health` and stateless `POST /api/v1/consumption/summary`, problem details errors, request ids, JSON access log, body caps, settings, CORS, OpenAPI snapshot. `/check verify` not run yet.
 - P2-02 Add PostgreSQL Compose service, SQLAlchemy mappings, Alembic migration; justify constraints.
 - P2-03 Add authenticated ownership context and property/meter CRUD.
 - P2-04 Add readings API with transaction and idempotency behavior.
