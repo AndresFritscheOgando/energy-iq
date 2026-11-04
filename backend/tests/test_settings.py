@@ -17,7 +17,18 @@ def clean_environment(monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.delenv(name, raising=False)
 
 
-def test_defaults() -> None:
+def test_env_is_required() -> None:
+    with pytest.raises(ValidationError) as excinfo:
+        Settings()
+
+    assert [(e["loc"], e["type"]) for e in excinfo.value.errors()] == [
+        (("env",), "missing")
+    ]
+
+
+def test_dev_defaults(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("ENERGYIQ_ENV", "dev")
+
     settings = Settings()
 
     assert settings.env == "dev"
@@ -52,12 +63,14 @@ def test_explicit_cors_origins_override_env_default(
 def test_explicit_empty_cors_origins_are_kept_in_dev(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    monkeypatch.setenv("ENERGYIQ_ENV", "dev")
     monkeypatch.setenv("ENERGYIQ_CORS_ORIGINS", "[]")
 
     assert Settings().cors_origins == []
 
 
 def test_values_are_read_from_environment(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("ENERGYIQ_ENV", "dev")
     monkeypatch.setenv("ENERGYIQ_MAX_BODY_BYTES", "2048")
     monkeypatch.setenv("ENERGYIQ_LOG_LEVEL", "DEBUG")
 
@@ -80,6 +93,7 @@ def test_values_are_read_from_environment(monkeypatch: pytest.MonkeyPatch) -> No
 def test_invalid_values_fail_naming_the_field(
     monkeypatch: pytest.MonkeyPatch, name: str, value: str, field: str
 ) -> None:
+    monkeypatch.setenv("ENERGYIQ_ENV", "dev")
     monkeypatch.setenv(name, value)
 
     with pytest.raises(ValidationError) as excinfo:
@@ -89,7 +103,7 @@ def test_invalid_values_fail_naming_the_field(
 
 
 def test_settings_are_frozen() -> None:
-    settings = Settings()
+    settings = Settings(env="dev")
 
     with pytest.raises(ValidationError):
         settings.env = "prod"  # type: ignore[misc]

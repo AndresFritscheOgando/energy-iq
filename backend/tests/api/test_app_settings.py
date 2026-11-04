@@ -26,6 +26,15 @@ def _preflight(client: TestClient, origin: str) -> httpx2.Response:
     )
 
 
+def test_create_app_without_env_fails_naming_it() -> None:
+    with pytest.raises(ValidationError) as excinfo:
+        create_app()
+
+    assert [(e["loc"], e["type"]) for e in excinfo.value.errors()] == [
+        (("env",), "missing")
+    ]
+
+
 def test_invalid_setting_fails_create_app_naming_the_field(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

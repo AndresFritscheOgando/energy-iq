@@ -72,7 +72,10 @@ These variables last only for the current terminal session. `.venv`, `.cache`, a
 
 ### Run the API server
 
+`ENERGYIQ_ENV` has no default: the server, `alembic`, and the maintenance command refuse to start without it (a `missing` error naming `env`), so a deploy can never fall back to dev settings by accident. Set it once per terminal for local work:
+
 ```powershell
+$env:ENERGYIQ_ENV = "dev"
 uv run uvicorn energyiq.main:create_app --factory --app-dir backend/src --no-access-log
 ```
 
@@ -101,7 +104,7 @@ The same session reaches the owner scoped routes: `POST /api/v1/properties` with
 
 For that meter, `POST /api/v1/meters/{id}/readings` accepts a decimal string such as `{"local_date":"2026-11-03","cumulative_kwh":"13049"}` or an offset `recorded_at`. `GET` at the same path lists readings. `PATCH /api/v1/meters/{id}/readings/{reading_id}` changes only `status` (`valid`, `flagged`, `voided`). Use `/api/v1/meters/{id}/events` to record a reset or replacement, then `POST` to `/events/{event_id}/approve` or `/reject`. `GET /api/v1/meters/{id}/consumption?from=...&to=...` computes measured kWh and coverage from stored history. Authenticated create and decide POSTs accept an optional `Idempotency-Key` for safe retries; a replay returns the original response with `Idempotent-Replayed: true`. See [spec 0009/0003](docs/specs/0009-phase-two-persistence-auth/0003-readings-events-api.md).
 
-kWh values travel as decimal strings in both directions, timestamps need an explicit offset and come back as UTC `Z` text, and every error is `application/problem+json` with a stable `code`. Settings: `ENERGYIQ_ENV` (`dev`, `test`, `prod`), `ENERGYIQ_MAX_BODY_BYTES`, `ENERGYIQ_CORS_ORIGINS` (JSON list), `ENERGYIQ_LOG_LEVEL`, `ENERGYIQ_SESSION_COOKIE_SECURE` (default `true` in `prod`, which also renames the cookie to `__Host-energyiq_session`), and `ENERGYIQ_TRUSTED_ORIGINS` (JSON list of browser origins the CSRF check accepts besides the server's own; default `["http://localhost:3000"]`, required in `prod`). See [spec 0008](docs/specs/0008-minimal-fastapi-application/index.md).
+kWh values travel as decimal strings in both directions, timestamps need an explicit offset and come back as UTC `Z` text, and every error is `application/problem+json` with a stable `code`. Settings: `ENERGYIQ_ENV` (`dev`, `test`, `prod`; required), `ENERGYIQ_MAX_BODY_BYTES`, `ENERGYIQ_CORS_ORIGINS` (JSON list), `ENERGYIQ_LOG_LEVEL`, `ENERGYIQ_SESSION_COOKIE_SECURE` (default `true` in `prod`, which also renames the cookie to `__Host-energyiq_session`), and `ENERGYIQ_TRUSTED_ORIGINS` (JSON list of browser origins the CSRF check accepts besides the server's own; default `["http://localhost:3000"]`, required in `prod`). See [spec 0008](docs/specs/0008-minimal-fastapi-application/index.md).
 
 ### Run the database
 
@@ -114,7 +117,7 @@ uv run alembic upgrade head                      # migrate energyiq_dev as the m
 uv run alembic check                             # confirm the ORM and the schema agree
 ```
 
-`alembic downgrade base` removes every table. To migrate the test database by hand, set `$env:ENERGYIQ_ENV = "test"` first. The `dev` and `test` settings default to the values in `infra/.env.example`, so a local run needs no extra variables. With `ENERGYIQ_ENV=prod`, `ENERGYIQ_DATABASE_URL`, `ENERGYIQ_MIGRATION_DATABASE_URL`, `ENERGYIQ_SECRET_KEY` (at least 32 characters; it keys the rate limit HMACs), and `ENERGYIQ_TRUSTED_ORIGINS` are required. Optional: `ENERGYIQ_DB_POOL_SIZE` (1 to 50, default 5) and `ENERGYIQ_DB_STATEMENT_TIMEOUT_MS` (100 to 60000, default 5000).
+These commands also need `$env:ENERGYIQ_ENV = "dev"` (see above). `alembic downgrade base` removes every table. To migrate the test database by hand, set `$env:ENERGYIQ_ENV = "test"` instead. The `dev` and `test` settings default to the values in `infra/.env.example`, so a local run needs no other variables. With `ENERGYIQ_ENV=prod`, `ENERGYIQ_DATABASE_URL`, `ENERGYIQ_MIGRATION_DATABASE_URL`, `ENERGYIQ_SECRET_KEY` (at least 32 characters; it keys the rate limit HMACs), and `ENERGYIQ_TRUSTED_ORIGINS` are required. Optional: `ENERGYIQ_DB_POOL_SIZE` (1 to 50, default 5) and `ENERGYIQ_DB_STATEMENT_TIMEOUT_MS` (100 to 60000, default 5000).
 
 The API still starts without a database. `GET /health` never touches it. `GET /health/ready` answers 200 with the schema revision when the database is reachable and migrated, or a 503 problem with code `database_unavailable` or `schema_out_of_date`. To start over with a fresh volume, run `docker compose -f infra/compose.yaml down -v`.
 
