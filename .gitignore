@@ -20,3 +20,7 @@ artifacts/private/
 .agents
 skills.lock
 /docs
+# Local IDE and agent tool state
+.idea/
+skills-lock.json
+test-preferences.json

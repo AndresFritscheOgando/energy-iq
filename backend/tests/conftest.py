@@ -1,4 +1,4 @@
-"""Shared pytest configuration: Hypothesis profiles for property tests.
+"""Shared pytest configuration: Hypothesis profiles and database fixtures.
 
 ``ENERGYIQ_HYPOTHESIS_PROFILE`` picks the profile. The default ``energyiq``
 profile is derandomized and keeps no example database, so every run tries the
@@ -9,8 +9,25 @@ set. An unknown name raises ``InvalidArgument`` and stops the session.
 """
 
 import os
+from collections.abc import Iterator
 
+import pytest
+from alembic import command
+from fastapi import FastAPI
 from hypothesis import settings
+from sqlalchemy import Connection, Engine, create_engine, make_url, text
+from sqlalchemy.exc import OperationalError
+from sqlalchemy.orm import Session
+from sqlalchemy.pool import NullPool
+
+from energyiq.main import create_app
+from energyiq.platform.db import (
+    alembic_config,
+    build_engine,
+    connect_args,
+    get_db_session,
+)
+from energyiq.platform.settings import Settings as AppSettings
 
 PROFILE_ENV_VAR = "ENERGYIQ_HYPOTHESIS_PROFILE"
 DEFAULT_PROFILE = "energyiq"
@@ -37,3 +54,160 @@ settings.register_profile(
     print_blob=True,
 )
 settings.load_profile(os.environ.get(PROFILE_ENV_VAR, DEFAULT_PROFILE))
+
+
+# Database and secret settings (spec 0009/0001 AC-8). A developer's shell must
+# not leak into tests; ``prod_secrets`` provides the values prod requires.
+SECRET_ENV_VARS = (
+    "ENERGYIQ_DATABASE_URL",
+    "ENERGYIQ_MIGRATION_DATABASE_URL",
+    "ENERGYIQ_DB_POOL_SIZE",
+    "ENERGYIQ_DB_STATEMENT_TIMEOUT_MS",
+    "ENERGYIQ_SECRET_KEY",
+)
+PROD_SECRETS = {
+    "ENERGYIQ_DATABASE_URL": "postgresql+psycopg://app:synthetic@db.invalid/prod",
+    "ENERGYIQ_MIGRATION_DATABASE_URL": (
+        "postgresql+psycopg://migrator:synthetic@db.invalid/prod"
+    ),
+    "ENERGYIQ_SECRET_KEY": "synthetic-prod-secret-key-for-tests-only",
+}
+
+
+@pytest.fixture(autouse=True)
+def clean_database_environment(monkeypatch: pytest.MonkeyPatch) -> None:
+    for name in SECRET_ENV_VARS:
+        monkeypatch.delenv(name, raising=False)
+
+
+@pytest.fixture
+def prod_secrets(monkeypatch: pytest.MonkeyPatch) -> dict[str, str]:
+    """Set the variables ``env=prod`` requires to synthetic values."""
+    for name, value in PROD_SECRETS.items():
+        monkeypatch.setenv(name, value)
+    return dict(PROD_SECRETS)
+
+
+# PostgreSQL fixtures (spec 0009/0001 AC-7) ------------------------------------
+#
+# Tests marked ``db`` run against the Compose test database. If it is not
+# reachable they are skipped with the reason, or fail when
+# ``ENERGYIQ_REQUIRE_DB=1``. The schema is migrated to head once per session as
+# the migrator role. Each test then runs as the app role inside an outer
+# transaction that is rolled back, so tests never see each other's rows.
+
+REQUIRE_DB_ENV_VAR = "ENERGYIQ_REQUIRE_DB"
+# Read once at import, before the autouse fixture above clears the variables.
+DB_SETTINGS = AppSettings(env="test")
+
+
+TEST_DATABASE_SUFFIX = "_test"
+
+
+def require_test_database(*dsns: str) -> None:
+    """Stop the run unless every DSN names a ``*_test`` database.
+
+    The fixtures migrate and create scratch databases, so a stray shell
+    ``ENERGYIQ_*`` URL must never point them at dev or prod data.
+    """
+    for dsn in dsns:
+        database = make_url(dsn).database or ""
+        if not database.endswith(TEST_DATABASE_SUFFIX):
+            pytest.fail(
+                f"refusing to run db tests against {database_location(dsn)}: "
+                f"the database name must end with {TEST_DATABASE_SUFFIX!r}",
+                pytrace=False,
+            )
+
+
+def database_location(dsn: str) -> str:
+    """``host:port/database`` of a DSN, without the role or password."""
+    url = make_url(dsn)
+    return f"{url.host}:{url.port or 5432}/{url.database}"
+
+
+@pytest.fixture(scope="session")
+def migrator_engine() -> Iterator[Engine]:
+    """Migrator role engine; checks reachability, then migrates to head."""
+    dsn = DB_SETTINGS.migration_database_url.get_secret_value()
+    require_test_database(dsn, DB_SETTINGS.database_url.get_secret_value())
+    engine = create_engine(
+        dsn,
+        poolclass=NullPool,
+        connect_args=connect_args(DB_SETTINGS.db_statement_timeout_ms),
+    )
+    try:
+        with engine.connect() as connection:
+            connection.execute(text("SELECT 1"))
+    except OperationalError:
+        engine.dispose()
+        reason = f"PostgreSQL not reachable at {database_location(dsn)}"
+        if os.environ.get(REQUIRE_DB_ENV_VAR) == "1":
+            pytest.fail(f"{reason} and {REQUIRE_DB_ENV_VAR}=1", pytrace=False)
+        pytest.skip(reason)
+
+    config = alembic_config()
+    with engine.connect() as connection:
+        config.attributes["connection"] = connection
+        command.upgrade(config, "head")
+        connection.commit()
+    yield engine
+    engine.dispose()
+
+
+@pytest.fixture(scope="session")
+def app_engine(migrator_engine: Engine) -> Iterator[Engine]:
+    """App role engine for the migrated test database."""
+    engine = build_engine(DB_SETTINGS)
+    yield engine
+    engine.dispose()
+
+
+@pytest.fixture(autouse=True)
+def _require_database_for_db_marker(request: pytest.FixtureRequest) -> None:
+    """Gate every ``db`` test on the session database check."""
+    if request.node.get_closest_marker("db") is not None:
+        request.getfixturevalue("migrator_engine")
+
+
+@pytest.fixture
+def db_connection(app_engine: Engine) -> Iterator[Connection]:
+    """App role connection inside an outer transaction rolled back after."""
+    with app_engine.connect() as connection:
+        transaction = connection.begin()
+        try:
+            yield connection
+        finally:
+            transaction.rollback()
+
+
+@pytest.fixture
+def db_session(db_connection: Connection) -> Iterator[Session]:
+    """A session whose ``begin()`` and ``commit()`` use savepoints only."""
+    session = Session(
+        bind=db_connection,
+        join_transaction_mode="create_savepoint",
+        expire_on_commit=False,
+    )
+    try:
+        yield session
+    finally:
+        session.close()
+
+
+@pytest.fixture
+def db_app(db_session: Session) -> FastAPI:
+    """The app with ``get_db_session`` bound to the rolled back test session."""
+    app = create_app(DB_SETTINGS)
+
+    def override() -> Iterator[Session]:
+        yield db_session
+
+    app.dependency_overrides[get_db_session] = override
+    return app
+
+
+@pytest.fixture
+def db_settings() -> AppSettings:
+    """Settings for the test database (honours ``ENERGYIQ_*`` at import)."""
+    return DB_SETTINGS
