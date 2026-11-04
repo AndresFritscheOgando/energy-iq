@@ -37,6 +37,7 @@ def test_invalid_setting_fails_create_app_naming_the_field(
     assert excinfo.value.errors()[0]["loc"] == ("env",)
 
 
+@pytest.mark.usefixtures("prod_secrets")
 @pytest.mark.parametrize("path", DOC_PATHS)
 def test_prod_hides_docs(path: str) -> None:
     client = TestClient(create_app(Settings(env="prod")))
@@ -55,6 +56,7 @@ def test_dev_and_test_serve_docs(env: Literal["dev", "test"], path: str) -> None
     assert client.get(path).status_code == 200
 
 
+@pytest.mark.usefixtures("prod_secrets")
 def test_prod_installs_no_cors_middleware() -> None:
     app = create_app(Settings(env="prod"))
 
@@ -100,6 +102,7 @@ def test_disallowed_origin_never_gets_allow_origin(client: TestClient) -> None:
     assert "access-control-allow-origin" not in simple.headers
 
 
+@pytest.mark.usefixtures("prod_secrets")
 def test_configured_origins_replace_the_default() -> None:
     client = TestClient(
         create_app(Settings(env="prod", cors_origins=["https://app.example"]))

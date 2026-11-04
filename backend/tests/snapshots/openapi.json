@@ -548,6 +548,70 @@
         "title": "MeterEventType",
         "type": "string"
       },
+      "Problem": {
+        "description": "Problem details body (RFC 9457) with a stable ``code`` member.",
+        "properties": {
+          "code": {
+            "title": "Code",
+            "type": "string"
+          },
+          "detail": {
+            "title": "Detail",
+            "type": "string"
+          },
+          "errors": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/ValidationErrorItem"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Errors"
+          },
+          "errors_truncated": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Errors Truncated"
+          },
+          "request_id": {
+            "title": "Request Id",
+            "type": "string"
+          },
+          "status": {
+            "title": "Status",
+            "type": "integer"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "type": {
+            "default": "about:blank",
+            "title": "Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "title",
+          "status",
+          "detail",
+          "code",
+          "request_id"
+        ],
+        "title": "Problem",
+        "type": "object"
+      },
       "ReadingIn": {
         "additionalProperties": false,
         "description": "One cumulative reading; ``created_at`` is stamped by the server.",
@@ -600,6 +664,26 @@
         ],
         "title": "ReadingStatus",
         "type": "string"
+      },
+      "ReadyResponse": {
+        "description": "Body of ``GET /health/ready``.",
+        "properties": {
+          "schema_revision": {
+            "title": "Schema Revision",
+            "type": "string"
+          },
+          "status": {
+            "const": "ready",
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "status",
+          "schema_revision"
+        ],
+        "title": "ReadyResponse",
+        "type": "object"
       },
       "ValidationErrorItem": {
         "description": "One located validation failure; never carries the submitted value.",
@@ -782,6 +866,38 @@
           }
         },
         "summary": "Health",
+        "tags": [
+          "health"
+        ]
+      }
+    },
+    "/health/ready": {
+      "get": {
+        "description": "Report ready when the database answers and its schema is at head.",
+        "operationId": "ready_health_ready_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReadyResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "Ready",
         "tags": [
           "health"
         ]

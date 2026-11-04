@@ -68,7 +68,8 @@ def test_decimal_and_time_outputs_are_strings(app: FastAPI) -> None:
 def test_readings_domain_imports_no_framework() -> None:
     code = (
         "import sys, energyiq.readings; "
-        "print(','.join(m for m in ('fastapi', 'starlette', 'pydantic', 'pydantic_core') "
+        "print(','.join(m for m in ('fastapi', 'starlette', 'pydantic', 'pydantic_core', "
+        "'sqlalchemy', 'psycopg', 'alembic') "
         "if m in sys.modules))"
     )
 

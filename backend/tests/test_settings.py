@@ -32,12 +32,14 @@ def test_test_env_keeps_local_cors_origin(monkeypatch: pytest.MonkeyPatch) -> No
     assert Settings().cors_origins == ["http://localhost:3000"]
 
 
+@pytest.mark.usefixtures("prod_secrets")
 def test_prod_defaults_to_no_cors_origins(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("ENERGYIQ_ENV", "prod")
 
     assert Settings().cors_origins == []
 
 
+@pytest.mark.usefixtures("prod_secrets")
 def test_explicit_cors_origins_override_env_default(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

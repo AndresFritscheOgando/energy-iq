@@ -40,6 +40,7 @@ def test_create_app_keeps_given_settings() -> None:
     assert app.state.settings is settings
 
 
+@pytest.mark.usefixtures("prod_secrets")
 def test_create_app_reads_environment_when_settings_omitted(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
