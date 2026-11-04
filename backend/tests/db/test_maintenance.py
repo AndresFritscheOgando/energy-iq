@@ -107,7 +107,7 @@ def test_purge_deletes_only_expired_rows(
 ) -> None:
     counts = maintenance.purge(migrator_engine, NOW)
 
-    assert set(counts) == {"auth_attempts", "sessions"}
+    assert set(counts) == {"auth_attempts", "sessions", "idempotency_keys"}
     assert counts["auth_attempts"] >= 1
     assert counts["sessions"] >= 2
     assert _remaining(migrator_engine, seeded["old"]) == set()
@@ -125,7 +125,11 @@ def test_main_prints_counts_only(
     assert maintenance.main() == 0
 
     lines = capsys.readouterr().out.splitlines()
-    assert [line.split(":")[0] for line in lines] == ["auth_attempts", "sessions"]
+    assert [line.split(":")[0] for line in lines] == [
+        "auth_attempts",
+        "sessions",
+        "idempotency_keys",
+    ]
     assert all(line.split(": ")[1].isdigit() for line in lines)
 
 

@@ -43,7 +43,7 @@ def test_every_unsafe_api_route_has_the_csrf_dependency() -> None:
     routes = _api_routes(create_app(Settings(env="test")))
     unsafe = [route for route in routes if (route.methods or set()) & UNSAFE_METHODS]
 
-    assert len(unsafe) == 10
+    assert len(unsafe) == 15
     for route in unsafe:
         assert require_csrf in set(_calls(route.dependant)), route.path
 

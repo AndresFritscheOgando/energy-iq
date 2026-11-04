@@ -24,6 +24,7 @@ TABLES = {
     "meter_events",
     "readings",
     "audit_events",
+    "idempotency_keys",
 }
 
 CONSTRAINTS = {
@@ -63,6 +64,11 @@ CONSTRAINTS = {
     "ck_readings_status",
     "pk_audit_events",
     "fk_audit_events_actor_user_id_users",
+    "pk_idempotency_keys",
+    "fk_idempotency_keys_user_id_users",
+    "ck_idempotency_keys_key_length",
+    "ck_idempotency_keys_request_hash_length",
+    "ck_idempotency_keys_response_pair",
 }
 
 INDEXES = {
@@ -91,6 +97,8 @@ INDEXES = {
     "pk_audit_events",
     "ix_audit_events_actor_user_id",
     "ix_audit_events_entity",
+    "pk_idempotency_keys",
+    "ix_idempotency_keys_expires_at",
 }
 
 PARTIAL_UNIQUE_INDEXES = {
@@ -123,6 +131,19 @@ COLUMN_UPDATES = {
     ("meter_events", "status"),
     ("meter_events", "decided_by"),
     ("meter_events", "decided_at"),
+    *(
+        ("idempotency_keys", name)
+        for name in (
+            "user_id",
+            "key",
+            "operation",
+            "request_hash",
+            "response_status",
+            "response_body",
+            "created_at",
+            "expires_at",
+        )
+    ),
 }
 
 
@@ -224,7 +245,7 @@ def test_every_foreign_key_restricts_deletes_and_is_indexed(
             {"tables": list(TABLES)},
         ).all()
 
-    assert len(rows) == 9
+    assert len(rows) == 10
     for name, delete_rule, column, table, indexed in rows:
         assert delete_rule == "r", f"{name} is not ON DELETE RESTRICT"
         assert indexed, f"{table}.{column} ({name}) has no leading index"
@@ -272,6 +293,7 @@ def test_app_role_table_grants(migrator_engine: Engine) -> None:
 
     expected = {(table, p) for table in TABLES for p in ("SELECT", "INSERT")}
     expected.add(("alembic_version", "SELECT"))
+    expected.add(("idempotency_keys", "UPDATE"))
     assert set(map(tuple, rows)) == expected
 
 

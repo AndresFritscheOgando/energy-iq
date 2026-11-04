@@ -243,6 +243,11 @@ def delete_committed_user(
                 return
             for sql in (
                 "DELETE FROM audit_events WHERE actor_user_id = :id OR entity_id = :id",
+                "DELETE FROM idempotency_keys WHERE user_id = :id",
+                "DELETE FROM readings WHERE meter_id IN (SELECT m.id FROM meters m JOIN properties p ON p.id = m.property_id WHERE p.owner_user_id = :id)",
+                "DELETE FROM meter_events WHERE meter_id IN (SELECT m.id FROM meters m JOIN properties p ON p.id = m.property_id WHERE p.owner_user_id = :id)",
+                "DELETE FROM meters WHERE property_id IN (SELECT id FROM properties WHERE owner_user_id = :id)",
+                "DELETE FROM properties WHERE owner_user_id = :id",
                 "DELETE FROM sessions WHERE user_id = :id",
                 "DELETE FROM users WHERE id = :id",
             ):
