@@ -24,6 +24,7 @@ from energyiq.platform.http.problems import (
     problem_responses,
     request_id_from,
 )
+from energyiq.platform.idempotency import IdempotencyKey, execute_idempotent, idempotent
 from energyiq.platform.pagination import Page, PageQuery
 from energyiq.properties import repository
 from energyiq.properties.models import Distributor, MeterRow, PropertyRow
@@ -88,8 +89,9 @@ def meter_out(row: MeterRow) -> MeterOut:
 @router.post(
     "/properties",
     status_code=201,
+    response_model=PropertyOut,
     tags=["properties"],
-    dependencies=[Depends(require_json)],
+    dependencies=[Depends(require_json), Depends(idempotent)],
     responses=_CREATE_OWN,
 )
 def create_property(
@@ -98,33 +100,36 @@ def create_property(
     request: Request,
     session: DbSession,
     now: Now,
-) -> PropertyOut:
-    row = PropertyRow(
-        id=uuid4(),
-        owner_user_id=user.id,
-        nickname=body.nickname,
-        region=body.region,
-        timezone=body.timezone,
-        created_at=now,
-        updated_at=now,
-    )
+    key: IdempotencyKey,
+) -> Response:
+    def write() -> PropertyOut:
+        row = PropertyRow(
+            id=uuid4(),
+            owner_user_id=user.id,
+            nickname=body.nickname,
+            region=body.region,
+            timezone=body.timezone,
+            created_at=now,
+            updated_at=now,
+        )
+        session.add(row)
+        session.flush()
+        record_audit(
+            session,
+            user.id,
+            "property.create",
+            "property",
+            row.id,
+            request_id_from(request.scope),
+            changed_fields(body.model_fields_set),
+            occurred_at=now,
+        )
+        return property_out(row)
+
     try:
-        with session.begin():
-            session.add(row)
-            session.flush()
-            record_audit(
-                session,
-                user.id,
-                "property.create",
-                "property",
-                row.id,
-                request_id_from(request.scope),
-                changed_fields(body.model_fields_set),
-                occurred_at=now,
-            )
+        return execute_idempotent(session, user.id, request, key, body, now, 201, write)
     except IntegrityError as exc:
         raise integrity_problem(exc, CONFLICTS) from None
-    return property_out(row)
 
 
 @router.get("/properties", tags=["properties"], responses=_LIST_OWN)
@@ -228,8 +233,9 @@ def archive_property(
 @router.post(
     "/properties/{property_id}/meters",
     status_code=201,
+    response_model=MeterOut,
     tags=["meters"],
-    dependencies=[Depends(require_json)],
+    dependencies=[Depends(require_json), Depends(idempotent)],
     responses=_WRITE,
 )
 def create_meter(
@@ -239,36 +245,39 @@ def create_meter(
     request: Request,
     session: DbSession,
     now: Now,
-) -> MeterOut:
+    key: IdempotencyKey,
+) -> Response:
+    def write() -> MeterOut:
+        if repository.get_property(session, user.id, property_id) is None:
+            raise _not_found()
+        row = MeterRow(
+            id=uuid4(),
+            property_id=property_id,
+            distributor=body.distributor.value,
+            label=body.label,
+            register_digits=body.register_digits,
+            active=True,
+            created_at=now,
+            updated_at=now,
+        )
+        session.add(row)
+        session.flush()
+        record_audit(
+            session,
+            user.id,
+            "meter.create",
+            "meter",
+            row.id,
+            request_id_from(request.scope),
+            changed_fields(body.model_fields_set),
+            occurred_at=now,
+        )
+        return meter_out(row)
+
     try:
-        with session.begin():
-            if repository.get_property(session, user.id, property_id) is None:
-                raise _not_found()
-            row = MeterRow(
-                id=uuid4(),
-                property_id=property_id,
-                distributor=body.distributor.value,
-                label=body.label,
-                register_digits=body.register_digits,
-                active=True,
-                created_at=now,
-                updated_at=now,
-            )
-            session.add(row)
-            session.flush()
-            record_audit(
-                session,
-                user.id,
-                "meter.create",
-                "meter",
-                row.id,
-                request_id_from(request.scope),
-                changed_fields(body.model_fields_set),
-                occurred_at=now,
-            )
+        return execute_idempotent(session, user.id, request, key, body, now, 201, write)
     except IntegrityError as exc:
         raise integrity_problem(exc, CONFLICTS) from None
-    return meter_out(row)
 
 
 @router.get("/properties/{property_id}/meters", tags=["meters"], responses=_READ)
@@ -346,16 +355,24 @@ def update_meter(
     return meter_out(row)
 
 
-@router.post("/meters/{meter_id}/deactivate", tags=["meters"], responses=_ACTION)
+@router.post(
+    "/meters/{meter_id}/deactivate",
+    tags=["meters"],
+    response_model=MeterOut,
+    dependencies=[Depends(idempotent)],
+    responses=_ACTION,
+)
 def deactivate_meter(
     user: CurrentUserDep,
     meter_id: UUID,
     request: Request,
     session: DbSession,
     now: Now,
-) -> MeterOut:
+    key: IdempotencyKey,
+) -> Response:
     """Terminal: a replacement physical meter gets a new meter (ADR-006)."""
-    with session.begin():
+
+    def write() -> MeterOut:
         row = repository.lock_meter(session, user.id, meter_id)
         if row is None:
             raise _not_found()
@@ -375,4 +392,6 @@ def deactivate_meter(
             changed_fields(["active", "deactivated_at"]),
             occurred_at=now,
         )
-    return meter_out(row)
+        return meter_out(row)
+
+    return execute_idempotent(session, user.id, request, key, None, now, 200, write)

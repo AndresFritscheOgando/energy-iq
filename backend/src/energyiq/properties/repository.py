@@ -92,6 +92,18 @@ def lock_meter(session: Session, owner_id: UUID, meter_id: UUID) -> MeterRow | N
     ).one_or_none()
 
 
+def share_meter_and_property(
+    session: Session, owner_id: UUID, meter_id: UUID
+) -> MeterRow | None:
+    """Hold both owner rows stable while a consumption chain is loaded."""
+    return session.scalars(
+        _owned_meters(owner_id)
+        .where(MeterRow.id == meter_id)
+        .with_for_update(read=True, of=(PropertyRow, MeterRow))
+        .execution_options(populate_existing=True)
+    ).one_or_none()
+
+
 def list_meters(
     session: Session,
     owner_id: UUID,

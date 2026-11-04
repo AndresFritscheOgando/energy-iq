@@ -44,6 +44,11 @@ ERROR_DETAILS: Mapping[str, str] = {
     "meter_label_taken": "An active meter with this label already exists.",
     "meter_inactive": "The meter is inactive.",
     "too_many_attempts": "Too many attempts. Try again later.",
+    "invalid_idempotency_key": "The Idempotency-Key header is invalid.",
+    "idempotency_key_reused": "The Idempotency-Key was used for a different request.",
+    "reading_exists_at_instant": "A reading already exists at this instant.",
+    "reading_voided": "A voided reading cannot change status.",
+    "event_not_pending": "The event has already been decided.",
 }
 
 VALIDATION_MESSAGES: Mapping[str, str] = {
@@ -69,6 +74,10 @@ VALIDATION_MESSAGES: Mapping[str, str] = {
     "invalid_cursor": "Cursor is invalid.",
     "empty_patch": "Give at least one field to change.",
     "invalid_register_digits": "Value must be an integer from 4 to 9.",
+    "reading_in_future": "Value cannot be in the future.",
+    "exactly_one_of": "Give exactly one of recorded_at or local_date.",
+    "range_order": "to must be after from.",
+    "window_too_long": "The window cannot exceed 366 days.",
 }
 
 _PYDANTIC_TYPES: Mapping[str, str] = {
