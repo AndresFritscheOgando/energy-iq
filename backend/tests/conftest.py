@@ -9,7 +9,8 @@ set. An unknown name raises ``InvalidArgument`` and stops the session.
 """
 
 import os
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
+from datetime import datetime
 
 import pytest
 from alembic import command
@@ -64,6 +65,8 @@ SECRET_ENV_VARS = (
     "ENERGYIQ_DB_POOL_SIZE",
     "ENERGYIQ_DB_STATEMENT_TIMEOUT_MS",
     "ENERGYIQ_SECRET_KEY",
+    "ENERGYIQ_SESSION_COOKIE_SECURE",
+    "ENERGYIQ_TRUSTED_ORIGINS",
 )
 PROD_SECRETS = {
     "ENERGYIQ_DATABASE_URL": "postgresql+psycopg://app:synthetic@db.invalid/prod",
@@ -71,6 +74,7 @@ PROD_SECRETS = {
         "postgresql+psycopg://migrator:synthetic@db.invalid/prod"
     ),
     "ENERGYIQ_SECRET_KEY": "synthetic-prod-secret-key-for-tests-only",
+    "ENERGYIQ_TRUSTED_ORIGINS": '["https://app.example"]',
 }
 
 
@@ -165,8 +169,9 @@ def app_engine(migrator_engine: Engine) -> Iterator[Engine]:
 
 @pytest.fixture(autouse=True)
 def _require_database_for_db_marker(request: pytest.FixtureRequest) -> None:
-    """Gate every ``db`` test on the session database check."""
-    if request.node.get_closest_marker("db") is not None:
+    """Gate every ``db`` and ``db_commit`` test on the session database check."""
+    node = request.node
+    if node.get_closest_marker("db") or node.get_closest_marker("db_commit"):
         request.getfixturevalue("migrator_engine")
 
 
@@ -211,3 +216,36 @@ def db_app(db_session: Session) -> FastAPI:
 def db_settings() -> AppSettings:
     """Settings for the test database (honours ``ENERGYIQ_*`` at import)."""
     return DB_SETTINGS
+
+
+@pytest.fixture
+def delete_committed_user(
+    migrator_engine: Engine,
+) -> Iterator[Callable[[str, datetime], None]]:
+    """Delete what a committing test wrote for one user, as the migrator.
+
+    Call it with the user's email and the instant the test started. It
+    removes the user's audit rows, sessions, and row, plus every auth
+    attempt since that instant (attempts carry no user id; only committing
+    tests write them, because the others roll back).
+    """
+
+    def cleanup(email: str, since: datetime) -> None:
+        with migrator_engine.begin() as connection:
+            user_id = connection.execute(
+                text("SELECT id FROM users WHERE email = :email"), {"email": email}
+            ).scalar_one_or_none()
+            connection.execute(
+                text("DELETE FROM auth_attempts WHERE attempted_at >= :since"),
+                {"since": since},
+            )
+            if user_id is None:
+                return
+            for sql in (
+                "DELETE FROM audit_events WHERE actor_user_id = :id OR entity_id = :id",
+                "DELETE FROM sessions WHERE user_id = :id",
+                "DELETE FROM users WHERE id = :id",
+            ):
+                connection.execute(text(sql), {"id": user_id})
+
+    yield cleanup

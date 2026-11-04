@@ -79,8 +79,14 @@ def test_allowed_preflight_without_credentials(client: TestClient) -> None:
     assert response.status_code == 200
     headers = response.headers
     assert headers["access-control-allow-origin"] == "http://localhost:3000"
-    assert set(headers["access-control-allow-methods"].split(", ")) == {"GET", "POST"}
-    assert "X-Request-ID" in headers["access-control-allow-headers"]
+    assert set(headers["access-control-allow-methods"].split(", ")) == {
+        "GET",
+        "POST",
+        "PATCH",
+        "DELETE",
+    }
+    for name in ("X-Request-ID", "X-EnergyIQ-CSRF", "Idempotency-Key"):
+        assert name in headers["access-control-allow-headers"]
     assert "access-control-allow-credentials" not in headers
 
 
@@ -88,7 +94,9 @@ def test_allowed_simple_request_exposes_request_id(client: TestClient) -> None:
     response = client.get("/health", headers={"Origin": "http://localhost:3000"})
 
     assert response.headers["access-control-allow-origin"] == "http://localhost:3000"
-    assert response.headers["access-control-expose-headers"] == "X-Request-ID"
+    assert response.headers["access-control-expose-headers"] == (
+        "X-Request-ID, Retry-After, Idempotent-Replayed"
+    )
     assert "access-control-allow-credentials" not in response.headers
 
 

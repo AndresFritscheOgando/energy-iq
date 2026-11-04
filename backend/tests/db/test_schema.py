@@ -15,12 +15,27 @@ from energyiq.platform.schema import load_metadata
 pytestmark = pytest.mark.db
 
 APP_ROLE = "energyiq_app"
-TABLES = {"users", "properties", "meters", "meter_events", "readings", "audit_events"}
+TABLES = {
+    "users",
+    "sessions",
+    "auth_attempts",
+    "properties",
+    "meters",
+    "meter_events",
+    "readings",
+    "audit_events",
+}
 
 CONSTRAINTS = {
     "pk_users",
     "uq_users_email",
     "ck_users_email_length",
+    "pk_sessions",
+    "fk_sessions_user_id_users",
+    "uq_sessions_token_hash",
+    "ck_sessions_token_hash_length",
+    "pk_auth_attempts",
+    "ck_auth_attempts_kind",
     "pk_properties",
     "fk_properties_owner_user_id_users",
     "ck_properties_nickname_length",
@@ -53,6 +68,12 @@ CONSTRAINTS = {
 INDEXES = {
     "pk_users",
     "uq_users_email",
+    "pk_sessions",
+    "ix_sessions_user_id",
+    "uq_sessions_token_hash",
+    "pk_auth_attempts",
+    "ix_auth_attempts_email_key",
+    "ix_auth_attempts_client_key",
     "pk_properties",
     "ix_properties_owner_user_id",
     "uq_properties_owner_nickname_active",
@@ -85,6 +106,8 @@ PARTIAL_UNIQUE_INDEXES = {
 COLUMN_UPDATES = {
     ("users", "password_hash"),
     ("users", "disabled_at"),
+    ("sessions", "last_seen_at"),
+    ("sessions", "revoked_at"),
     ("properties", "nickname"),
     ("properties", "region"),
     ("properties", "timezone"),
@@ -201,7 +224,7 @@ def test_every_foreign_key_restricts_deletes_and_is_indexed(
             {"tables": list(TABLES)},
         ).all()
 
-    assert len(rows) == 8
+    assert len(rows) == 9
     for name, delete_rule, column, table, indexed in rows:
         assert delete_rule == "r", f"{name} is not ON DELETE RESTRICT"
         assert indexed, f"{table}.{column} ({name}) has no leading index"
@@ -267,16 +290,14 @@ def test_app_role_column_update_grants(migrator_engine: Engine) -> None:
     assert set(map(tuple, rows)) == COLUMN_UPDATES
 
 
-def test_app_role_may_use_the_audit_identity_sequence(
-    migrator_engine: Engine,
+@pytest.mark.parametrize("sequence", ["audit_events_id_seq", "auth_attempts_id_seq"])
+def test_app_role_may_use_the_identity_sequences(
+    migrator_engine: Engine, sequence: str
 ) -> None:
     with migrator_engine.connect() as connection:
         allowed = connection.execute(
-            text(
-                "SELECT has_sequence_privilege(:role,"
-                " 'public.audit_events_id_seq', 'USAGE')"
-            ),
-            {"role": APP_ROLE},
+            text("SELECT has_sequence_privilege(:role, :sequence, 'USAGE')"),
+            {"role": APP_ROLE, "sequence": f"public.{sequence}"},
         ).scalar_one()
 
     assert allowed is True

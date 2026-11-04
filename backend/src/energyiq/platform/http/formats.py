@@ -5,7 +5,7 @@ can change between versions: Decimals as fixed point strings, instants as
 ``Z`` suffixed UTC text, and durations as ISO 8601.
 """
 
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 
 _MICROSECONDS_PER_SECOND = 1_000_000
@@ -57,3 +57,8 @@ def format_duration(value: timedelta) -> str:
     if not date_part and not time_part:
         return "PT0S"
     return "P" + date_part + (f"T{time_part}" if time_part else "")
+
+
+def format_instant(value: datetime) -> str:
+    """``format_utc`` of any aware instant, such as a ``timestamptz`` value."""
+    return format_utc(value.astimezone(UTC))

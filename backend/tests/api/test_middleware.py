@@ -157,7 +157,9 @@ def test_500_from_a_dependency_carries_no_cors_headers(
     app.dependency_overrides[get_now] = broken_clock
 
     response = TestClient(app).post(
-        PATH, json=summary_body([]), headers={"Origin": "http://localhost:3000"}
+        PATH,
+        json=summary_body([]),
+        headers={"Origin": "http://localhost:3000", "X-EnergyIQ-CSRF": "1"},
     )
 
     assert response.status_code == 500

@@ -1,8 +1,25 @@
 """Route dependencies for HTTP conventions."""
 
-from fastapi import Request
+from datetime import datetime
+from typing import Annotated
 
+from fastapi import Depends, Request
+
+from energyiq.platform.clock import get_now
 from energyiq.platform.http.problems import ProblemError
+from energyiq.platform.settings import Settings
+
+Now = Annotated[datetime, Depends(get_now)]
+"""The request's instant; tests override ``get_now`` to freeze it."""
+
+
+def get_settings(request: Request) -> Settings:
+    """The settings ``create_app`` was built with."""
+    settings: Settings = request.app.state.settings
+    return settings
+
+
+AppSettings = Annotated[Settings, Depends(get_settings)]
 
 
 def is_json_media_type(content_type: str | None) -> bool:

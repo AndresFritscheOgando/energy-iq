@@ -20,7 +20,7 @@ def _errors(client: TestClient, body: object) -> list[dict[str, Any]]:
     assert response.headers["content-type"] == "application/problem+json"
     problem = response.json()
     assert problem["code"] == "validation_error"
-    assert problem["detail"] == "The request body failed validation."
+    assert problem["detail"] == "The request failed validation."
     errors: list[dict[str, Any]] = problem["errors"]
     for item in errors:
         assert set(item) == {"loc", "code", "message"}

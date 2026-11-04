@@ -5,6 +5,7 @@ description = "EnergyIQ RD electricity intelligence platform"
 requires-python = ">=3.13,<3.14"
 dependencies = [
     "alembic>=1.20.1",
+    "argon2-cffi>=25.1.0",
     "fastapi>=0.162.0",
     "psycopg[binary]>=3.3.7",
     "pydantic-settings>=2.16.2",
@@ -24,10 +25,11 @@ dev = [
 
 [tool.pytest.ini_options]
 testpaths = ["backend/tests"]
-pythonpath = ["backend/src"]
+pythonpath = ["backend/src", "backend/tests"]
 addopts = "--import-mode=importlib -rs"
 markers = [
     "db: needs the PostgreSQL test database (skipped when unreachable unless ENERGYIQ_REQUIRE_DB=1)",
+    "db_commit: commits to the PostgreSQL test database and cleans up after itself (gated like db)",
 ]
 
 [tool.ruff]

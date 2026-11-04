@@ -7,20 +7,25 @@ use case opens one ``with session.begin():`` (umbrella transaction rules).
 """
 
 import logging
-from collections.abc import Iterable, Iterator
+from collections.abc import Iterable, Iterator, Mapping
 from functools import cache
 from pathlib import Path
+from typing import Annotated
 
 from alembic.config import Config
 from alembic.script import ScriptDirectory
-from fastapi import FastAPI, Request
+from fastapi import Depends, FastAPI, Request
 from sqlalchemy import Engine, MetaData, create_engine
 from sqlalchemy.exc import IntegrityError, OperationalError
 from sqlalchemy.exc import TimeoutError as PoolTimeoutError
 from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
 from starlette.responses import Response
 
-from energyiq.platform.http.problems import problem_response, request_id_from
+from energyiq.platform.http.problems import (
+    ProblemError,
+    problem_response,
+    request_id_from,
+)
 from energyiq.platform.logging import ERROR_LOGGER
 from energyiq.platform.settings import Settings
 
@@ -106,11 +111,35 @@ def get_db_session(request: Request) -> Iterator[Session]:
         session.close()
 
 
+DbSession = Annotated[Session, Depends(get_db_session)]
+"""The request's session; routes open their own ``with session.begin():``."""
+
+
 def constraint_name(exc: IntegrityError) -> str | None:
     """The violated constraint's name, as reported by PostgreSQL."""
     diag = getattr(exc.orig, "diag", None)
     name = getattr(diag, "constraint_name", None)
     return name if isinstance(name, str) else None
+
+
+class UnmappedIntegrityError(RuntimeError):
+    """An integrity violation no route expects; carries the name only."""
+
+
+def integrity_problem(
+    exc: IntegrityError, conflicts: Mapping[str, tuple[int, str]]
+) -> Exception:
+    """The problem for a violated constraint, mapped by its name.
+
+    The ``IntegrityError`` text holds PostgreSQL's ``DETAIL`` line, which
+    names the duplicate value (an email, a nickname). Callers raise the
+    result ``from None``, so that text never reaches a log or a traceback.
+    """
+    name = constraint_name(exc)
+    if name is not None and name in conflicts:
+        status, code = conflicts[name]
+        return ProblemError(status, code)
+    return UnmappedIntegrityError(f"unmapped integrity violation: {name}")
 
 
 async def _handle_database_unavailable(request: Request, exc: Exception) -> Response:

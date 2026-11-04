@@ -34,8 +34,9 @@ def test_openapi_matches_snapshot(app: FastAPI) -> None:
 def test_error_responses_are_problem_json_only(app: FastAPI) -> None:
     responses = app.openapi()["paths"][SUMMARY]["post"]["responses"]
 
-    assert set(responses) == {"200", "400", "413", "415", "422", "500"}
-    for status in ("400", "413", "415", "422", "500"):
+    errors = {"400", "401", "403", "413", "415", "422", "500", "503"}
+    assert set(responses) == {"200", *errors}
+    for status in errors:
         content = responses[status]["content"]
         assert set(content) == {"application/problem+json"}
         assert content["application/problem+json"]["schema"] == {

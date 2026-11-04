@@ -27,7 +27,7 @@ ERROR_DETAILS: Mapping[str, str] = {
     "method_not_allowed": "This method is not allowed for this path.",
     "payload_too_large": "The request body exceeds the size limit.",
     "unsupported_media_type": "The request body must be application/json.",
-    "validation_error": "The request body failed validation.",
+    "validation_error": "The request failed validation.",
     "duplicate_id": "Ids must be unique within readings and within events.",
     "reading_timestamp_conflict": (
         "Readings share a timestamp and must be resolved first."
@@ -35,6 +35,15 @@ ERROR_DETAILS: Mapping[str, str] = {
     "internal_error": "An unexpected error occurred.",
     "database_unavailable": "The service is temporarily unavailable.",
     "schema_out_of_date": "The database schema is not up to date.",
+    # Spec 0009/0002 (umbrella error catalog).
+    "not_authenticated": "Authentication is required.",
+    "invalid_credentials": "The email or password is incorrect.",
+    "csrf_rejected": "The request failed cross site request checks.",
+    "email_taken": "An account with this email already exists.",
+    "property_name_taken": "A property with this nickname already exists.",
+    "meter_label_taken": "An active meter with this label already exists.",
+    "meter_inactive": "The meter is inactive.",
+    "too_many_attempts": "Too many attempts. Try again later.",
 }
 
 VALIDATION_MESSAGES: Mapping[str, str] = {
@@ -52,6 +61,14 @@ VALIDATION_MESSAGES: Mapping[str, str] = {
     "window_order": "window.end must be after window.start.",
     "approval_pair": "approved_by and approved_at must be given together.",
     "invalid_value": "Value is invalid.",
+    # Spec 0009/0002 (umbrella validation catalog).
+    "invalid_email": "Value must be an email address.",
+    "password_length": "Password must be 12 to 128 characters.",
+    "invalid_timezone": "Value must be an IANA time zone name.",
+    "invalid_text_length": "Text length is out of range.",
+    "invalid_cursor": "Cursor is invalid.",
+    "empty_patch": "Give at least one field to change.",
+    "invalid_register_digits": "Value must be an integer from 4 to 9.",
 }
 
 _PYDANTIC_TYPES: Mapping[str, str] = {
@@ -120,11 +137,13 @@ class ProblemError(Exception):
         status: int,
         code: str,
         extensions: Mapping[str, object] | None = None,
+        headers: Mapping[str, str] | None = None,
     ) -> None:
         super().__init__(code)
         self.status = status
         self.code = code
         self.extensions: Mapping[str, object] = extensions or {}
+        self.headers: Mapping[str, str] = headers or {}
 
 
 def request_id_from(scope: Scope) -> str:
@@ -229,6 +248,7 @@ async def _handle_problem(request: Request, exc: Exception) -> Response:
         exc.code,
         request_id_from(request.scope),
         extensions=exc.extensions,
+        headers=exc.headers,
     )
 
 
