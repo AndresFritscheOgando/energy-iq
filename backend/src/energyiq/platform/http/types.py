@@ -1,9 +1,11 @@
 """Shared request field types for the HTTP contract (spec 0008 AC-4)."""
 
 from datetime import UTC, datetime
+from functools import cache
 from typing import Annotated
+from zoneinfo import available_timezones
 
-from pydantic import AwareDatetime, BeforeValidator, StringConstraints
+from pydantic import AfterValidator, AwareDatetime, BeforeValidator, StringConstraints
 from pydantic_core import PydanticCustomError
 
 KWH_PATTERN = r"^[0-9]{1,12}(\.[0-9]{1,6})?$"
@@ -42,3 +44,45 @@ KwhString = Annotated[str, StringConstraints(pattern=KWH_PATTERN)]
 
 UtcInstant = Annotated[AwareDatetime, BeforeValidator(parse_utc_instant)]
 """An instant given with an explicit offset, delivered to code as UTC."""
+
+
+# Spec 0009/0002 text fields ---------------------------------------------------
+
+
+@cache
+def iana_timezones() -> frozenset[str]:
+    """Every zone name ``zoneinfo`` can load (from ``tzdata`` on Windows)."""
+    return frozenset(available_timezones())
+
+
+def check_timezone(value: str) -> str:
+    if value not in iana_timezones():
+        raise PydanticCustomError(
+            "invalid_timezone", "Value must be an IANA time zone name."
+        )
+    return value
+
+
+def trimmed(minimum: int, maximum: int) -> AfterValidator:
+    """Strip surrounding whitespace, then require ``minimum..maximum`` chars."""
+
+    def check(value: str) -> str:
+        value = value.strip()
+        if not minimum <= len(value) <= maximum:
+            raise PydanticCustomError(
+                "invalid_text_length", "Text length is out of range."
+            )
+        return value
+
+    return AfterValidator(check)
+
+
+def reject_null(value: object) -> object:
+    """A PATCH field that may be omitted but never set to ``null``."""
+    if value is None:
+        raise PydanticCustomError("invalid_type", "Value has the wrong JSON type.")
+    return value
+
+
+IanaTimezone = Annotated[str, AfterValidator(check_timezone)]
+"""An IANA zone name, exactly as ``zoneinfo`` spells it."""

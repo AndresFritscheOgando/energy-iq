@@ -8,6 +8,7 @@ from energyiq.platform.db import Base
 
 MODEL_MODULES = (
     "energyiq.identity.models",
+    "energyiq.platform.idempotency",
     "energyiq.platform.audit",
     "energyiq.properties.models",
     "energyiq.readings.persistence.rows",

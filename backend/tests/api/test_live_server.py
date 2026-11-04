@@ -5,7 +5,8 @@ import socket
 import subprocess
 import sys
 import time
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
+from datetime import UTC, datetime
 from pathlib import Path
 from uuid import uuid4
 
@@ -14,7 +15,10 @@ import pytest
 
 from energyiq import __version__
 
+CSRF = {"X-EnergyIQ-CSRF": "1"}
+
 ROOT = Path(__file__).parents[3]
+CommittedCleanup = Callable[[str, datetime], None]
 
 
 def _free_port() -> int:
@@ -87,31 +91,66 @@ def live_client(tmp_path: Path) -> Iterator[httpx2.Client]:
             _stop(process)
 
 
-def test_live_server_answers_health_and_summary(live_client: httpx2.Client) -> None:
+def _summary_body() -> dict[str, object]:
+    return {
+        "meter_id": str(uuid4()),
+        "window": {"start": "2026-10-01T00:00:00Z", "end": "2026-10-03T00:00:00Z"},
+        "readings": [
+            {
+                "id": str(uuid4()),
+                "recorded_at": "2026-10-01T00:00:00Z",
+                "cumulative_kwh": "100",
+            },
+            {
+                "id": str(uuid4()),
+                "recorded_at": "2026-10-02T00:00:00Z",
+                "cumulative_kwh": "112.5",
+            },
+        ],
+    }
+
+
+def test_live_server_answers_health_and_guards_the_summary(
+    live_client: httpx2.Client,
+) -> None:
+    """No database needed: the 401 is decided before any query."""
     health = live_client.get("/health")
     summary = live_client.post(
-        "/api/v1/consumption/summary",
-        json={
-            "meter_id": str(uuid4()),
-            "window": {"start": "2026-10-01T00:00:00Z", "end": "2026-10-03T00:00:00Z"},
-            "readings": [
-                {
-                    "id": str(uuid4()),
-                    "recorded_at": "2026-10-01T00:00:00Z",
-                    "cumulative_kwh": "100",
-                },
-                {
-                    "id": str(uuid4()),
-                    "recorded_at": "2026-10-02T00:00:00Z",
-                    "cumulative_kwh": "112.5",
-                },
-            ],
-        },
+        "/api/v1/consumption/summary", json=_summary_body(), headers=CSRF
     )
 
     assert health.status_code == 200
     assert health.json() == {"status": "ok", "version": __version__}
-    assert summary.status_code == 200
-    assert summary.json()["measured_kwh"] == "12.5"
-    assert summary.json()["coverage_ratio"] == "0.5000"
+    assert summary.status_code == 401
+    assert summary.json()["code"] == "not_authenticated"
     assert "x-request-id" in summary.headers
+
+
+@pytest.mark.db
+def test_live_server_signs_in_and_serves_the_summary(
+    live_client: httpx2.Client, delete_committed_user: CommittedCleanup
+) -> None:
+    """Register through the real server, then summarize with its cookie.
+
+    The server commits, so the rows it wrote are deleted afterwards as the
+    migrator, including the register attempt that counts toward the
+    per client limit.
+    """
+    started = datetime.now(UTC)
+    email = f"live-{uuid4().hex}@example.test"
+    try:
+        register = live_client.post(
+            "/api/v1/auth/register",
+            json={"email": email, "password": "correct horse battery"},
+            headers=CSRF,
+        )
+        summary = live_client.post(
+            "/api/v1/consumption/summary", json=_summary_body(), headers=CSRF
+        )
+
+        assert register.status_code == 201, register.text
+        assert summary.status_code == 200, summary.text
+        assert summary.json()["measured_kwh"] == "12.5"
+        assert summary.json()["coverage_ratio"] == "0.5000"
+    finally:
+        delete_committed_user(email, started)

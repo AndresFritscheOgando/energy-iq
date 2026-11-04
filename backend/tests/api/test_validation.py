@@ -20,7 +20,7 @@ def _errors(client: TestClient, body: object) -> list[dict[str, Any]]:
     assert response.headers["content-type"] == "application/problem+json"
     problem = response.json()
     assert problem["code"] == "validation_error"
-    assert problem["detail"] == "The request body failed validation."
+    assert problem["detail"] == "The request failed validation."
     errors: list[dict[str, Any]] = problem["errors"]
     for item in errors:
         assert set(item) == {"loc", "code", "message"}
@@ -137,9 +137,9 @@ def test_window_end_must_be_after_start(
 @pytest.mark.parametrize(
     ("path", "body_update"),
     [
-        (["body", "extra"], {"extra": 1}),
+        (["body"], {"extra": 1}),
         (
-            ["body", "window", "zone"],
+            ["body", "window"],
             {
                 "window": {
                     "start": "2026-10-01T00:00:00Z",
@@ -173,10 +173,27 @@ def test_server_owned_and_unsupported_reading_fields_are_rejected(
 
     assert _errors(client, body) == [
         {
-            "loc": ["body", "readings", 0, field],
+            "loc": ["body", "readings", 0],
             "code": "unknown_field",
             "message": "Field is not allowed.",
         }
+    ]
+
+
+def test_unknown_field_names_are_never_echoed(
+    client: TestClient, summary_body: Body, reading: ReadingFactory
+) -> None:
+    key = "john.doe@example.test"
+    body = _one_reading(summary_body, reading, **{key: 1})
+    body[key] = 2
+
+    response = client.post("/api/v1/consumption/summary", json=body)
+
+    assert response.status_code == 422
+    assert key not in response.text
+    assert sorted((e["loc"], e["code"]) for e in response.json()["errors"]) == [
+        (["body"], "unknown_field"),
+        (["body", "readings", 0], "unknown_field"),
     ]
 
 
@@ -191,7 +208,7 @@ def test_event_created_at_is_rejected(client: TestClient, summary_body: Body) ->
     errors = _errors(client, summary_body([], events=[event]))
 
     assert [(e["loc"], e["code"]) for e in errors] == [
-        (["body", "events", 0, "created_at"], "unknown_field")
+        (["body", "events", 0], "unknown_field")
     ]
 
 

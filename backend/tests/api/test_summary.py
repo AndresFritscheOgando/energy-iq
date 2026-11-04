@@ -370,7 +370,7 @@ def test_route_stamps_one_instant_from_the_injected_clock(
         [reading("2026-10-01T16:00:00Z", "1"), reading("2026-10-02T16:00:00Z", "2")]
     )
 
-    response = TestClient(app).post(PATH, json=body)
+    response = TestClient(app).post(PATH, json=body, headers={"X-EnergyIQ-CSRF": "1"})
 
     assert response.status_code == 200
     assert len(calls) == 1

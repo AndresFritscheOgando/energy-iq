@@ -15,12 +15,28 @@ from energyiq.platform.schema import load_metadata
 pytestmark = pytest.mark.db
 
 APP_ROLE = "energyiq_app"
-TABLES = {"users", "properties", "meters", "meter_events", "readings", "audit_events"}
+TABLES = {
+    "users",
+    "sessions",
+    "auth_attempts",
+    "properties",
+    "meters",
+    "meter_events",
+    "readings",
+    "audit_events",
+    "idempotency_keys",
+}
 
 CONSTRAINTS = {
     "pk_users",
     "uq_users_email",
     "ck_users_email_length",
+    "pk_sessions",
+    "fk_sessions_user_id_users",
+    "uq_sessions_token_hash",
+    "ck_sessions_token_hash_length",
+    "pk_auth_attempts",
+    "ck_auth_attempts_kind",
     "pk_properties",
     "fk_properties_owner_user_id_users",
     "ck_properties_nickname_length",
@@ -48,11 +64,22 @@ CONSTRAINTS = {
     "ck_readings_status",
     "pk_audit_events",
     "fk_audit_events_actor_user_id_users",
+    "pk_idempotency_keys",
+    "fk_idempotency_keys_user_id_users",
+    "ck_idempotency_keys_key_length",
+    "ck_idempotency_keys_request_hash_length",
+    "ck_idempotency_keys_response_pair",
 }
 
 INDEXES = {
     "pk_users",
     "uq_users_email",
+    "pk_sessions",
+    "ix_sessions_user_id",
+    "uq_sessions_token_hash",
+    "pk_auth_attempts",
+    "ix_auth_attempts_email_key",
+    "ix_auth_attempts_client_key",
     "pk_properties",
     "ix_properties_owner_user_id",
     "uq_properties_owner_nickname_active",
@@ -70,6 +97,8 @@ INDEXES = {
     "pk_audit_events",
     "ix_audit_events_actor_user_id",
     "ix_audit_events_entity",
+    "pk_idempotency_keys",
+    "ix_idempotency_keys_expires_at",
 }
 
 PARTIAL_UNIQUE_INDEXES = {
@@ -85,6 +114,8 @@ PARTIAL_UNIQUE_INDEXES = {
 COLUMN_UPDATES = {
     ("users", "password_hash"),
     ("users", "disabled_at"),
+    ("sessions", "last_seen_at"),
+    ("sessions", "revoked_at"),
     ("properties", "nickname"),
     ("properties", "region"),
     ("properties", "timezone"),
@@ -100,6 +131,19 @@ COLUMN_UPDATES = {
     ("meter_events", "status"),
     ("meter_events", "decided_by"),
     ("meter_events", "decided_at"),
+    *(
+        ("idempotency_keys", name)
+        for name in (
+            "user_id",
+            "key",
+            "operation",
+            "request_hash",
+            "response_status",
+            "response_body",
+            "created_at",
+            "expires_at",
+        )
+    ),
 }
 
 
@@ -201,7 +245,7 @@ def test_every_foreign_key_restricts_deletes_and_is_indexed(
             {"tables": list(TABLES)},
         ).all()
 
-    assert len(rows) == 8
+    assert len(rows) == 10
     for name, delete_rule, column, table, indexed in rows:
         assert delete_rule == "r", f"{name} is not ON DELETE RESTRICT"
         assert indexed, f"{table}.{column} ({name}) has no leading index"
@@ -249,6 +293,7 @@ def test_app_role_table_grants(migrator_engine: Engine) -> None:
 
     expected = {(table, p) for table in TABLES for p in ("SELECT", "INSERT")}
     expected.add(("alembic_version", "SELECT"))
+    expected.add(("idempotency_keys", "UPDATE"))
     assert set(map(tuple, rows)) == expected
 
 
@@ -267,16 +312,14 @@ def test_app_role_column_update_grants(migrator_engine: Engine) -> None:
     assert set(map(tuple, rows)) == COLUMN_UPDATES
 
 
-def test_app_role_may_use_the_audit_identity_sequence(
-    migrator_engine: Engine,
+@pytest.mark.parametrize("sequence", ["audit_events_id_seq", "auth_attempts_id_seq"])
+def test_app_role_may_use_the_identity_sequences(
+    migrator_engine: Engine, sequence: str
 ) -> None:
     with migrator_engine.connect() as connection:
         allowed = connection.execute(
-            text(
-                "SELECT has_sequence_privilege(:role,"
-                " 'public.audit_events_id_seq', 'USAGE')"
-            ),
-            {"role": APP_ROLE},
+            text("SELECT has_sequence_privilege(:role, :sequence, 'USAGE')"),
+            {"role": APP_ROLE, "sequence": f"public.{sequence}"},
         ).scalar_one()
 
     assert allowed is True

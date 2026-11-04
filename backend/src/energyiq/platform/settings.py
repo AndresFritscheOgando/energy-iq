@@ -3,11 +3,19 @@
 from collections.abc import Mapping
 from typing import Annotated, Any, Literal
 
-from pydantic import Field, PositiveInt, SecretStr, field_validator, model_validator
+from pydantic import (
+    Field,
+    PositiveInt,
+    SecretStr,
+    ValidationInfo,
+    field_validator,
+    model_validator,
+)
 from pydantic_core import PydanticCustomError
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 DEV_CORS_ORIGINS = ["http://localhost:3000"]
+DEV_TRUSTED_ORIGINS = ["http://localhost:3000"]
 
 # Synthetic local values matching ``infra/.env.example`` (spec 0009/0001 AC-1).
 # ``prod`` never falls back to these: each must be set explicitly there.
@@ -21,6 +29,18 @@ LOCAL_SECRET_KEY = "energyiq-local-secret-key-synthetic-not-for-prod"
 # ``Settings(env="test")`` call a type error, so the fields default to this
 # sentinel and ``_required`` turns it into a ``missing`` error.
 _UNSET = SecretStr("")
+
+
+# The same marker for ``env``, which has no default in any environment: a
+# deploy that forgets ``ENERGYIQ_ENV`` must fail, not run with dev settings.
+class _Unset:
+    """A readable stand in, so the ``missing`` error does not print an address."""
+
+    def __repr__(self) -> str:
+        return "<unset>"
+
+
+_UNSET_ENV: Any = _Unset()
 
 
 def local_database_url(env: str, *, migrator: bool = False) -> str:
@@ -40,14 +60,19 @@ def local_database_url(env: str, *, migrator: bool = False) -> str:
 class Settings(BaseSettings):
     """Validated runtime configuration; invalid values fail at startup.
 
-    In ``prod`` the database URLs and the secret key have no default, so a
-    missing one fails with a ``missing`` error naming the field. Secrets are
-    ``SecretStr`` and render as ``**********`` in ``repr`` and logs.
+    ``env`` is required everywhere (no default), so an unset
+    ``ENERGYIQ_ENV`` fails with a ``missing`` error naming ``env``.
+    In ``prod`` the database URLs, the secret key, and the trusted origins
+    have no default, so a missing one fails with a ``missing`` error naming
+    the field. Secrets are ``SecretStr`` and render as ``**********`` in
+    ``repr`` and logs.
     """
 
     model_config = SettingsConfigDict(env_prefix="ENERGYIQ_", frozen=True)
 
-    env: Literal["dev", "test", "prod"] = "dev"
+    env: Literal["dev", "test", "prod"] = Field(
+        default=_UNSET_ENV, validate_default=True
+    )
     max_body_bytes: PositiveInt = 1_048_576
     cors_origins: list[str] = []
     log_level: Literal["DEBUG", "INFO", "WARNING", "ERROR"] = "INFO"
@@ -60,15 +85,29 @@ class Settings(BaseSettings):
     db_statement_timeout_ms: Annotated[int, Field(ge=100, le=60_000)] = 5000
     secret_key: SecretStr = Field(default=_UNSET, min_length=32, validate_default=True)
 
+    # Spec 0009/0002: session cookie and the CSRF ``Origin`` allow list.
+    session_cookie_secure: bool = False
+    trusted_origins: list[str] = Field(default_factory=list[str], validate_default=True)
+
     @field_validator(
-        "database_url", "migration_database_url", "secret_key", mode="before"
+        "env", "database_url", "migration_database_url", "secret_key", mode="before"
     )
     @classmethod
     def _required(cls, value: object) -> object:
-        """Report an unset secret as ``missing``, naming the field."""
-        if value is _UNSET:
+        """Report an unset ``env`` or secret as ``missing``, naming the field."""
+        if value is _UNSET or value is _UNSET_ENV:
             raise PydanticCustomError("missing", "Field required")
         return value
+
+    @field_validator("trusted_origins")
+    @classmethod
+    def _trusted_origins_in_prod(
+        cls, value: list[str], info: ValidationInfo
+    ) -> list[str]:
+        """``prod`` must name the browser origin (the Next.js proxy) explicitly."""
+        if info.data.get("env") == "prod" and not value:
+            raise PydanticCustomError("missing", "Field required")
+        return [origin.lower() for origin in value]
 
     @model_validator(mode="before")
     @classmethod
@@ -76,9 +115,11 @@ class Settings(BaseSettings):
         """Fill the per environment defaults for values left unset."""
         env = data.get("env", "dev")
         defaults: dict[str, Any] = {
-            "cors_origins": [] if env == "prod" else list(DEV_CORS_ORIGINS)
+            "cors_origins": [] if env == "prod" else list(DEV_CORS_ORIGINS),
+            "session_cookie_secure": env == "prod",
         }
         if env != "prod":
+            defaults["trusted_origins"] = list(DEV_TRUSTED_ORIGINS)
             defaults["database_url"] = local_database_url(env)
             defaults["migration_database_url"] = local_database_url(env, migrator=True)
             defaults["secret_key"] = LOCAL_SECRET_KEY

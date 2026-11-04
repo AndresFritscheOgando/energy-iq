@@ -17,12 +17,15 @@ from fastapi.openapi.utils import get_openapi
 from starlette.middleware.cors import CORSMiddleware
 
 from energyiq import __version__
+from energyiq.identity.passwords import PasswordService
+from energyiq.identity.router import router as identity_router
 from energyiq.platform.db import (
     build_engine,
     install_database_handlers,
     script_head,
     session_factory,
 )
+from energyiq.platform.http.csrf import CSRF_HEADER
 from energyiq.platform.http.health import router as health_router
 from energyiq.platform.http.middleware import (
     REQUEST_ID_HEADER,
@@ -36,9 +39,13 @@ from energyiq.platform.http.problems import (
 from energyiq.platform.http.ready import router as ready_router
 from energyiq.platform.logging import configure_logging
 from energyiq.platform.settings import Settings
+from energyiq.properties.router import router as properties_router
 from energyiq.readings.api.router import router as readings_router
+from energyiq.readings.api.stored_router import router as stored_router
 
 READINESS_POOL_TIMEOUT_SECONDS = 2
+IDEMPOTENCY_KEY_HEADER = "Idempotency-Key"
+IDEMPOTENT_REPLAYED_HEADER = "Idempotent-Replayed"
 
 
 def _problem_media_types(schema: dict[str, Any]) -> dict[str, Any]:
@@ -106,12 +113,16 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.state.session_factory = session_factory(engine)
     app.state.readiness_engine = readiness_engine
     app.state.schema_head = script_head()
+    app.state.passwords = PasswordService(settings.env)
 
     install_problem_handlers(app)
     install_database_handlers(app)
     app.include_router(health_router)
     app.include_router(ready_router)
+    app.include_router(identity_router)
+    app.include_router(properties_router)
     app.include_router(readings_router)
+    app.include_router(stored_router)
     _install_openapi(app)
 
     # add_middleware puts each new layer outside the previous ones.
@@ -120,9 +131,18 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         app.add_middleware(
             CORSMiddleware,
             allow_origins=settings.cors_origins,
-            allow_methods=["GET", "POST"],
-            allow_headers=["Content-Type", REQUEST_ID_HEADER],
-            expose_headers=[REQUEST_ID_HEADER],
+            allow_methods=["GET", "POST", "PATCH", "DELETE"],
+            allow_headers=[
+                "Content-Type",
+                REQUEST_ID_HEADER,
+                CSRF_HEADER,
+                IDEMPOTENCY_KEY_HEADER,
+            ],
+            expose_headers=[
+                REQUEST_ID_HEADER,
+                "Retry-After",
+                IDEMPOTENT_REPLAYED_HEADER,
+            ],
             allow_credentials=False,
         )
     app.add_middleware(RequestContextMiddleware)

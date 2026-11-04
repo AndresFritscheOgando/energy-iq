@@ -12,10 +12,16 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from starlette.types import Message
 
+from energyiq.identity.dependencies import CurrentUser, get_current_user
 from energyiq.main import create_app
+from energyiq.platform.http.csrf import CSRF_HEADER
 from energyiq.platform.settings import Settings
 
 SUMMARY_PATH = "/api/v1/consumption/summary"
+CSRF = {CSRF_HEADER: "1"}
+SYNTHETIC_USER = CurrentUser(
+    id=UUID("00000000-0000-4000-8000-0000000000aa"), email="owner@example.test"
+)
 
 
 @pytest.fixture(autouse=True)
@@ -53,14 +59,23 @@ def restore_energyiq_loggers() -> Iterator[None]:
             logger.propagate = propagate
 
 
+def signed_in(app: FastAPI) -> FastAPI:
+    """Answer ``get_current_user`` with a synthetic user, so tests of the
+    stateless summary need no database. Session auth is tested against
+    PostgreSQL in ``tests/identity``."""
+    app.dependency_overrides[get_current_user] = lambda: SYNTHETIC_USER
+    return app
+
+
 @pytest.fixture
 def app() -> FastAPI:
-    return create_app(Settings(env="test"))
+    return signed_in(create_app(Settings(env="test")))
 
 
 @pytest.fixture
 def client(app: FastAPI) -> TestClient:
-    return TestClient(app)
+    """Sends the CSRF header on every request, like the P3 client will."""
+    return TestClient(app, headers=CSRF)
 
 
 class _ListHandler(logging.Handler):
@@ -161,8 +176,14 @@ def _raw_call(
     headers: Sequence[tuple[str, str]] = (),
     chunks: Sequence[bytes] = (),
     disconnect_first: bool = False,
+    csrf: bool = True,
 ) -> RawResponse:
-    """Drive the ASGI app directly, for headers and bodies a client normalizes."""
+    """Drive the ASGI app directly, for headers and bodies a client normalizes.
+
+    The CSRF header is added unless ``csrf=False``.
+    """
+    if csrf:
+        headers = [(CSRF_HEADER, "1"), *headers]
 
     async def run() -> RawResponse:
         incoming: list[Message] = (

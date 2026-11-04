@@ -1,7 +1,7 @@
 {
   "include": ["backend/src", "backend/tests"],
   "exclude": ["**/__pycache__", ".venv", ".cache", ".local-python"],
-  "extraPaths": ["backend/src"],
+  "extraPaths": ["backend/src", "backend/tests"],
   "venvPath": ".",
   "venv": ".venv",
   "pythonVersion": "3.13",

@@ -5,80 +5,23 @@ runs in UTC with the configured statement timeout, and a timeout answers 503.
 """
 
 import logging
-from collections.abc import Iterator
-from dataclasses import dataclass
 from typing import Annotated
-from uuid import uuid4
 
 import pytest
-from alembic import command
+from dbsupport import Scratch, migrate
 from fastapi import Depends, FastAPI
 from fastapi.testclient import TestClient
-from pydantic import SecretStr
-from sqlalchemy import Engine, create_engine, make_url, text
+from sqlalchemy import text
 from sqlalchemy.orm import Session
-from sqlalchemy.pool import NullPool
 
 from energyiq.main import create_app
 from energyiq.platform.db import (
-    alembic_config,
-    connect_args,
     get_db_session,
     script_head,
 )
 from energyiq.platform.settings import Settings
 
 pytestmark = pytest.mark.db
-
-
-@dataclass(frozen=True)
-class Scratch:
-    settings: Settings
-    migrator_dsn: str
-
-
-def _with_database(dsn: str, database: str) -> str:
-    return make_url(dsn).set(database=database).render_as_string(hide_password=False)
-
-
-@pytest.fixture
-def scratch(migrator_engine: Engine, db_settings: Settings) -> Iterator[Scratch]:
-    """A new empty database owned by the migrator, dropped afterwards."""
-    name = f"energyiq_scratch_{uuid4().hex[:12]}"
-    admin = migrator_engine.execution_options(isolation_level="AUTOCOMMIT")
-    with admin.connect() as connection:
-        connection.execute(text(f'CREATE DATABASE "{name}"'))
-    migrator_dsn = _with_database(
-        db_settings.migration_database_url.get_secret_value(), name
-    )
-    app_dsn = _with_database(db_settings.database_url.get_secret_value(), name)
-    try:
-        yield Scratch(
-            settings=Settings(
-                env="test",
-                database_url=SecretStr(app_dsn),
-                migration_database_url=SecretStr(migrator_dsn),
-            ),
-            migrator_dsn=migrator_dsn,
-        )
-    finally:
-        with admin.connect() as connection:
-            connection.execute(text(f'DROP DATABASE "{name}" WITH (FORCE)'))
-
-
-def _migrate(dsn: str, target: str, *, down: bool = False) -> None:
-    engine = create_engine(dsn, poolclass=NullPool, connect_args=connect_args(5000))
-    config = alembic_config()
-    try:
-        with engine.connect() as connection:
-            config.attributes["connection"] = connection
-            if down:
-                command.downgrade(config, target)
-            else:
-                command.upgrade(config, target)
-            connection.commit()
-    finally:
-        engine.dispose()
 
 
 def _ready(settings: Settings) -> tuple[int, dict[str, object]]:
@@ -97,9 +40,9 @@ def test_ready_at_head(db_settings: Settings) -> None:
 def test_out_of_date_through_the_migration_lifecycle(scratch: Scratch) -> None:
     """No version table, then head, then ``downgrade base`` (AC-5)."""
     before = _ready(scratch.settings)
-    _migrate(scratch.migrator_dsn, "head")
+    migrate(scratch.migrator_dsn, "head")
     migrated = _ready(scratch.settings)
-    _migrate(scratch.migrator_dsn, "base", down=True)
+    migrate(scratch.migrator_dsn, "base", down=True)
     downgraded = _ready(scratch.settings)
 
     assert before[0] == 503
@@ -108,25 +51,6 @@ def test_out_of_date_through_the_migration_lifecycle(scratch: Scratch) -> None:
     assert migrated == (200, {"status": "ready", "schema_revision": script_head()})
     assert downgraded[0] == 503
     assert downgraded[1]["code"] == "schema_out_of_date"
-
-
-def test_downgrade_base_removes_every_table(scratch: Scratch) -> None:
-    _migrate(scratch.migrator_dsn, "head")
-    _migrate(scratch.migrator_dsn, "base", down=True)
-
-    engine = create_engine(scratch.migrator_dsn, poolclass=NullPool)
-    try:
-        with engine.connect() as connection:
-            tables = connection.execute(
-                text(
-                    "SELECT tablename FROM pg_tables WHERE schemaname = 'public'"
-                    " AND tablename <> 'alembic_version'"
-                )
-            ).all()
-    finally:
-        engine.dispose()
-
-    assert tables == []
 
 
 def _probe_app(settings: Settings) -> FastAPI:
