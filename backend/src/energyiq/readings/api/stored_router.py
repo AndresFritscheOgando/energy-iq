@@ -12,7 +12,7 @@ from starlette.responses import Response
 
 from energyiq.identity.dependencies import CurrentUserDep
 from energyiq.platform.audit import record_audit
-from energyiq.platform.db import DbSession, constraint_name
+from energyiq.platform.db import DbSession, constraint_name, integrity_problem
 from energyiq.platform.http.csrf import require_csrf
 from energyiq.platform.http.dependencies import Now, require_json
 from energyiq.platform.http.formats import format_instant
@@ -204,7 +204,7 @@ def create_reading(
         return execute_idempotent(session, user.id, request, key, body, now, 201, write)
     except IntegrityError as exc:
         if constraint_name(exc) != "uq_readings_meter_instant_active":
-            raise
+            raise integrity_problem(exc, {}) from None
         at = body.recorded_at
         if at is None and body.local_date is not None:
             with session.begin():

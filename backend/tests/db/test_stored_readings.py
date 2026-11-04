@@ -1,11 +1,15 @@
 """Stored readings and events through the authenticated API, with synthetic data."""
 
+import logging
 from typing import Any
 from uuid import uuid4
 
 import pytest
 from dbsupport import Probe
 from fastapi.testclient import TestClient
+from sqlalchemy.exc import IntegrityError
+
+from energyiq.readings.api import stored_router
 
 pytestmark = pytest.mark.db
 
@@ -278,3 +282,37 @@ def test_failed_retry_key_is_reusable_and_expired_key_is_overwritten(
     response = api.post(path, json=newer, headers=headers)
     assert response.status_code == 201, response.text
     assert response.headers.get("Idempotent-Replayed") is None
+
+
+class _Diag:
+    constraint_name = "uq_some_other_constraint"
+
+
+class _Orig(Exception):
+    diag = _Diag()
+
+
+def test_unmapped_reading_integrity_error_drops_postgres_detail(
+    api: TestClient,
+    meter: str,
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    detail = "DETAIL: Key (secret)=(owner@example.test) already exists."
+
+    def violate(*_args: object, **_kwargs: object) -> object:
+        raise IntegrityError("INSERT ...", {}, _Orig(detail))
+
+    monkeypatch.setattr(stored_router, "execute_idempotent", violate)
+    with caplog.at_level(logging.ERROR, logger="energyiq.errors"):
+        response = api.post(
+            f"{meter}/readings",
+            json={"recorded_at": "2026-11-01T12:00:00Z", "cumulative_kwh": "1"},
+        )
+    assert response.status_code == 500
+    assert "owner@example.test" not in response.text
+    logged = " ".join(
+        str(value) for record in caplog.records for value in vars(record).values()
+    )
+    assert "uq_some_other_constraint" in logged
+    assert "owner@example.test" not in logged

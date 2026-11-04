@@ -1,13 +1,13 @@
 """Stored summaries agree with the full history domain oracle."""
 
-from datetime import datetime
+from datetime import datetime, timedelta
 from decimal import Decimal
 from typing import Any
 from uuid import UUID, uuid4
 
 import pytest
 from fastapi.testclient import TestClient
-from hypothesis import HealthCheck, given, settings
+from hypothesis import HealthCheck, example, given, settings
 from hypothesis import strategies as st
 
 from energyiq.readings import (
@@ -32,6 +32,12 @@ def _instant(value: str) -> datetime:
     return datetime.fromisoformat(value)
 
 
+# Readings sit at noon on 2026-11-01..04. Window starts run from three days
+# before the first reading to four days after the last, so a window can lie
+# wholly before the history, straddle either edge, or lie wholly after it.
+WINDOW_BASE = _instant("2026-10-29T00:00:00Z")
+
+
 @settings(
     max_examples=12,
     deadline=None,
@@ -39,10 +45,14 @@ def _instant(value: str) -> datetime:
 )
 @given(
     values=st.lists(st.integers(min_value=0, max_value=500), min_size=4, max_size=4),
-    start_day=st.integers(min_value=0, max_value=6),
+    start_day=st.integers(min_value=0, max_value=10),
     span=st.integers(min_value=1, max_value=3),
     approve=st.booleans(),
 )
+# Wholly before the history: 2026-10-29 to 2026-11-01, ending before noon.
+@example(values=[10, 20, 30, 40], start_day=0, span=3, approve=False)
+# Wholly after it: 2026-11-06 to 2026-11-09.
+@example(values=[10, 20, 30, 40], start_day=8, span=3, approve=True)
 def test_stored_summary_matches_full_history(
     api: TestClient,
     owner: dict[str, Any],
@@ -94,8 +104,8 @@ def test_stored_summary_matches_full_history(
     event_body = event.json()
     if approve:
         event_body = api.post(f"{path}/events/{event_body['id']}/approve").json()
-    start = _instant(f"2026-11-{start_day + 1:02d}T00:00:00Z")
-    end = _instant(f"2026-11-{start_day + span + 1:02d}T00:00:00Z")
+    start = WINDOW_BASE + timedelta(days=start_day)
+    end = start + timedelta(days=span)
     response = api.get(
         f"{path}/consumption", params={"from": start.isoformat(), "to": end.isoformat()}
     )
