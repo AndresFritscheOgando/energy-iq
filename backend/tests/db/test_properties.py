@@ -74,20 +74,24 @@ def test_create_returns_the_property_with_defaults(
         ),
         (
             {"nickname": "Casa", "owner_user_id": str(uuid4())},
-            "owner_user_id",
+            None,
             "unknown_field",
         ),
         ({"nickname": 7}, "nickname", "invalid_type"),
     ],
 )
 def test_create_validation(
-    api: TestClient, owner: dict[str, Any], body: dict[str, Any], loc: str, code: str
+    api: TestClient,
+    owner: dict[str, Any],
+    body: dict[str, Any],
+    loc: str | None,
+    code: str,
 ) -> None:
     response = api.post(PROPERTIES, json=body)
 
     assert response.status_code == 422
     error = response.json()["errors"][0]
-    assert (error["loc"], error["code"]) == (["body", loc], code)
+    assert (error["loc"], error["code"]) == (["body", loc] if loc else ["body"], code)
 
 
 def test_eighty_character_nickname_and_region_fit(
@@ -215,7 +219,7 @@ def test_patch_changes_named_fields_only(
         ({"timezone": None}, ["body", "timezone"], "invalid_type"),
         (
             {"archived_at": "2026-11-04T12:00:00Z"},
-            ["body", "archived_at"],
+            ["body"],
             "unknown_field",
         ),
     ],

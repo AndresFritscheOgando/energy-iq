@@ -56,17 +56,17 @@ def test_create_returns_an_active_meter(
         ({"distributor": "EDEMARS"}, "distributor", "invalid_enum"),
         ({"label": ""}, "label", "invalid_text_length"),
         ({"label": "l" * 61}, "label", "invalid_text_length"),
-        ({"active": False}, "active", "unknown_field"),
+        ({"active": False}, None, "unknown_field"),
     ],
 )
 def test_create_validation(
-    api: TestClient, home: str, body: dict[str, Any], loc: str, code: str
+    api: TestClient, home: str, body: dict[str, Any], loc: str | None, code: str
 ) -> None:
     response = _meter(api, home, **body)
 
     assert response.status_code == 422
     error = response.json()["errors"][0]
-    assert (error["loc"], error["code"]) == (["body", loc], code)
+    assert (error["loc"], error["code"]) == (["body", loc] if loc else ["body"], code)
 
 
 @pytest.mark.parametrize("digits", [4, 9, None])
@@ -170,7 +170,7 @@ def test_patch_label_and_digits(
     [
         ({}, ["body"], "empty_patch"),
         ({"label": None}, ["body", "label"], "invalid_type"),
-        ({"distributor": "EDEESTE"}, ["body", "distributor"], "unknown_field"),
+        ({"distributor": "EDEESTE"}, ["body"], "unknown_field"),
     ],
 )
 def test_patch_validation(

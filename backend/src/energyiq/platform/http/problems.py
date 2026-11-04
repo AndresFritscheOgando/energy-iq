@@ -223,9 +223,14 @@ async def _handle_validation(request: Request, exc: Exception) -> Response:
     items: list[dict[str, object]] = []
     for error in errors[:MAX_VALIDATION_ERRORS]:
         code = _validation_code(str(error["type"]))
+        loc = list(error["loc"])
+        if code == "unknown_field":
+            # The last element is the client's own key text, which can carry
+            # personal data; point at the object that holds it instead.
+            loc = loc[:-1]
         items.append(
             {
-                "loc": list(error["loc"]),
+                "loc": loc,
                 "code": code,
                 "message": VALIDATION_MESSAGES[code],
             }
