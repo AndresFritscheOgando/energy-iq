@@ -8,6 +8,8 @@ Middleware, outermost first: ``RequestContextMiddleware`` → ``CORSMiddleware``
 (only when origins are configured) → ``BodySizeLimitMiddleware`` → routes.
 """
 
+from collections.abc import AsyncGenerator
+from contextlib import asynccontextmanager
 from typing import Any
 
 from fastapi import FastAPI
@@ -15,6 +17,12 @@ from fastapi.openapi.utils import get_openapi
 from starlette.middleware.cors import CORSMiddleware
 
 from energyiq import __version__
+from energyiq.platform.db import (
+    build_engine,
+    install_database_handlers,
+    script_head,
+    session_factory,
+)
 from energyiq.platform.http.health import router as health_router
 from energyiq.platform.http.middleware import (
     REQUEST_ID_HEADER,
@@ -25,9 +33,12 @@ from energyiq.platform.http.problems import (
     PROBLEM_MEDIA_TYPE,
     install_problem_handlers,
 )
+from energyiq.platform.http.ready import router as ready_router
 from energyiq.platform.logging import configure_logging
 from energyiq.platform.settings import Settings
 from energyiq.readings.api.router import router as readings_router
+
+READINESS_POOL_TIMEOUT_SECONDS = 2
 
 
 def _problem_media_types(schema: dict[str, Any]) -> dict[str, Any]:
@@ -67,6 +78,20 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         settings = Settings()
     configure_logging(settings.log_level)
 
+    # Engines connect lazily: no database is needed to build the app.
+    engine = build_engine(settings)
+    readiness_engine = build_engine(
+        settings, pool_size=1, pool_timeout=READINESS_POOL_TIMEOUT_SECONDS
+    )
+
+    @asynccontextmanager
+    async def lifespan(_: FastAPI) -> AsyncGenerator[None]:
+        try:
+            yield
+        finally:
+            engine.dispose()
+            readiness_engine.dispose()
+
     docs = settings.env != "prod"
     app = FastAPI(
         title="EnergyIQ RD",
@@ -74,11 +99,18 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         docs_url="/docs" if docs else None,
         redoc_url="/redoc" if docs else None,
         openapi_url="/openapi.json" if docs else None,
+        lifespan=lifespan,
     )
     app.state.settings = settings
+    app.state.engine = engine
+    app.state.session_factory = session_factory(engine)
+    app.state.readiness_engine = readiness_engine
+    app.state.schema_head = script_head()
 
     install_problem_handlers(app)
+    install_database_handlers(app)
     app.include_router(health_router)
+    app.include_router(ready_router)
     app.include_router(readings_router)
     _install_openapi(app)
 

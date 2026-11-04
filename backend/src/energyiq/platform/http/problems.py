@@ -33,6 +33,8 @@ ERROR_DETAILS: Mapping[str, str] = {
         "Readings share a timestamp and must be resolved first."
     ),
     "internal_error": "An unexpected error occurred.",
+    "database_unavailable": "The service is temporarily unavailable.",
+    "schema_out_of_date": "The database schema is not up to date.",
 }
 
 VALIDATION_MESSAGES: Mapping[str, str] = {
