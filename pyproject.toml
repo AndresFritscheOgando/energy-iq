@@ -3,10 +3,15 @@ name = "energyiq-rd"
 version = "0.1.0"
 description = "EnergyIQ RD electricity intelligence platform"
 requires-python = ">=3.13,<3.14"
-dependencies = []
+dependencies = [
+    "fastapi>=0.162.0",
+    "pydantic-settings>=2.16.2",
+    "uvicorn>=0.54.0",
+]
 
 [dependency-groups]
 dev = [
+    "httpx2>=2.16.0",
     "hypothesis>=6.170",
     "pyright>=1.1.414",
     "pytest",
