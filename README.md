@@ -163,7 +163,11 @@ All code lives in [`backend/src/energyiq`](backend/src/energyiq). Tests live in 
 
 Property based tests (P1-05, [spec 0006](docs/specs/0006-reading-chain-property-tests/index.md)) check ordering, interval rules, window tiling, and additivity across generated reading chains. Set `ENERGYIQ_HYPOTHESIS_PROFILE=deep` for a wider random search.
 
-**Next up:** P2-05, the Phase 2 security, concurrency, and migration gate tests ([spec 0009/0004](docs/specs/0009-phase-two-persistence-auth/0004-phase-two-gate-tests.md)). Reading semantics and discontinuity rules are documented in [12-METER-SEMANTICS](docs/12-METER-SEMANTICS.md) (P1-06).
+P2-05 added the Phase 2 gate tests: route enumerated cross user, unauthenticated, and CSRF matrices, forced overlap concurrency, migration round trips, and privilege checks ([spec 0009/0004](docs/specs/0009-phase-two-persistence-auth/0004-phase-two-gate-tests.md)). Session auth is recorded in [ADR-007](docs/adr/ADR-007-session-auth-same-origin-proxy.md).
+
+The Phase 2 gate passed on 2026-11-04 after a fresh model code review ([roadmap](docs/05-IMPLEMENTATION-ROADMAP.md)).
+
+**Next up:** P3-01, the Next.js setup, typed API layer, and session strategy. Reading semantics and discontinuity rules are documented in [12-METER-SEMANTICS](docs/12-METER-SEMANTICS.md) (P1-06).
 
 ## Documentation
 
