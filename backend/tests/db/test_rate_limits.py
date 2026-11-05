@@ -8,8 +8,10 @@ from typing import Any
 
 import pytest
 from dbsupport import PASSWORD, Clock, Probe
+from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
+from energyiq.platform.http.csrf import CSRF_HEADER
 from energyiq.platform.settings import LOCAL_SECRET_KEY
 
 pytestmark = pytest.mark.db
@@ -161,3 +163,35 @@ def test_attempt_rows_hold_keys_not_raw_values(
     audit_text = str(probe.rows("SELECT metadata FROM audit_events"))
     assert EMAIL not in audit_text
     assert "testclient" not in audit_text
+
+
+def test_forwarded_clients_behind_the_proxy_get_separate_buckets(
+    db_app: FastAPI, clock: Clock, probe: Probe
+) -> None:
+    """Spec 0010 AC-14: the loopback Next.js proxy forwards each browser's
+    address, so one browser's register limit never blocks another."""
+    proxy = TestClient(db_app, headers={CSRF_HEADER: "1"}, client=("127.0.0.1", 50000))
+
+    def from_browser(address: str, email: str) -> int:
+        return proxy.post(
+            REGISTER,
+            json={"email": email, "password": PASSWORD},
+            headers={"X-Forwarded-For": address},
+        ).status_code
+
+    for index in range(5):
+        assert from_browser("198.51.100.1", f"a{index}@example.test") == 201
+    assert from_browser("198.51.100.1", "a5@example.test") == 429
+
+    assert from_browser("198.51.100.2", "b0@example.test") == 201
+    keys = probe.one(
+        "SELECT count(DISTINCT client_key) FROM auth_attempts WHERE kind = 'register'"
+    )
+    assert keys == 2
+    assert (
+        probe.one(
+            "SELECT count(*) FROM auth_attempts WHERE client_key = :key",
+            {"key": _hmac("198.51.100.2")},
+        )
+        == 1
+    )

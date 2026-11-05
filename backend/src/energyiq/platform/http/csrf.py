@@ -9,8 +9,9 @@ the request's own origin or a configured trusted origin; ``Origin: null``
 
 The check is a router level dependency, so it runs before the 415, 401, and
 422 checks of each route. ``X-Forwarded-Host`` is never trusted: the own
-origin is the scheme the app sees (uvicorn applies ``X-Forwarded-Proto`` only
-from its loopback proxy list) plus the ``Host`` header.
+origin is the scheme the app sees (``ForwardedClientMiddleware`` applies a
+single valid ``X-Forwarded-Proto`` only from ``ENERGYIQ_FORWARDED_ALLOW_IPS``
+peers) plus the ``Host`` header.
 """
 
 from fastapi import Request

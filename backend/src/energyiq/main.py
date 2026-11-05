@@ -2,10 +2,15 @@
 
 Run with::
 
-    uv run uvicorn energyiq.main:create_app --factory --app-dir backend/src --no-access-log
+    uv run uvicorn energyiq.main:create_app --factory --app-dir backend/src         --no-access-log --no-proxy-headers
 
-Middleware, outermost first: ``RequestContextMiddleware`` → ``CORSMiddleware``
-(only when origins are configured) → ``BodySizeLimitMiddleware`` → routes.
+``--no-proxy-headers`` leaves the client address to
+``ForwardedClientMiddleware`` and ``ENERGYIQ_FORWARDED_ALLOW_IPS`` alone.
+
+Middleware, outermost first: ``ForwardedClientMiddleware`` →
+``NoStoreMiddleware`` (``/api/v1/auth/``) → ``RequestContextMiddleware`` →
+``CORSMiddleware`` (only when origins are configured) →
+``BodySizeLimitMiddleware`` → routes.
 """
 
 from collections.abc import AsyncGenerator
@@ -14,6 +19,7 @@ from typing import Any
 
 from fastapi import FastAPI
 from fastapi.openapi.utils import get_openapi
+from fastapi.routing import APIRoute
 from starlette.middleware.cors import CORSMiddleware
 
 from energyiq import __version__
@@ -30,6 +36,8 @@ from energyiq.platform.http.health import router as health_router
 from energyiq.platform.http.middleware import (
     REQUEST_ID_HEADER,
     BodySizeLimitMiddleware,
+    ForwardedClientMiddleware,
+    NoStoreMiddleware,
     RequestContextMiddleware,
 )
 from energyiq.platform.http.problems import (
@@ -46,6 +54,13 @@ from energyiq.readings.api.stored_router import router as stored_router
 READINESS_POOL_TIMEOUT_SECONDS = 2
 IDEMPOTENCY_KEY_HEADER = "Idempotency-Key"
 IDEMPOTENT_REPLAYED_HEADER = "Idempotent-Replayed"
+AUTH_PREFIX = "/api/v1/auth/"
+
+
+def operation_id(route: APIRoute) -> str:
+    """The route function name, so generated clients read ``login`` not
+    ``login_api_v1_auth_login_post`` (spec 0010 AC-3). Names must be unique."""
+    return route.name
 
 
 def _problem_media_types(schema: dict[str, Any]) -> dict[str, Any]:
@@ -107,6 +122,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         redoc_url="/redoc" if docs else None,
         openapi_url="/openapi.json" if docs else None,
         lifespan=lifespan,
+        generate_unique_id_function=operation_id,
     )
     app.state.settings = settings
     app.state.engine = engine
@@ -146,4 +162,6 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             allow_credentials=False,
         )
     app.add_middleware(RequestContextMiddleware)
+    app.add_middleware(NoStoreMiddleware, prefixes=[AUTH_PREFIX])
+    app.add_middleware(ForwardedClientMiddleware, trusted=settings.forwarded_allow_ips)
     return app
