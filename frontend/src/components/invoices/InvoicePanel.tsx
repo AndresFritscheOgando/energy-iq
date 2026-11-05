@@ -3,6 +3,7 @@
 import { useInfiniteQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useState, type FormEvent } from "react";
 
+import { DocumentUpload } from "@/components/documents/DocumentUpload";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ApiError } from "@/lib/api/errors";
@@ -318,6 +319,7 @@ export function InvoicePanel({
           This meter is inactive. Its invoices stay available to read, but they cannot be changed.
         </p>
       )}
+      <DocumentUpload meterId={meterId} active={active} />
       {active && (
         <form onSubmit={(event) => void save(event)} className="space-y-3 border-b pb-5">
           <h3 className="font-medium">New manual invoice</h3>
