@@ -88,6 +88,8 @@ Open exactly `http://localhost:3000`. That is the dev trusted origin; `http://12
 
 `ENERGYIQ_API_ORIGIN` is the FastAPI origin (dev default `http://127.0.0.1:8000`). Next.js writes the rewrite destination into the build, so set the same value for `pnpm build` and `pnpm start`; a production build or start without it fails naming the variable. It is server only: never prefix it with `NEXT_PUBLIC_`.
 
+`ENERGYIQ_EDGE_PROXY` (exactly `true` or `false`) says whether a trusted edge proxy sits in front of Next.js. The `/api` rewrite adds no client address and passes a browser supplied `X-Forwarded-For` through unchanged, so `src/proxy.ts` decides what FastAPI sees. `false` (the dev default when unset) deletes the header: nothing can be spoofed, and every browser shares one login and register rate limit bucket. `true` keeps it; use it only when a load balancer, nginx, or Caddy appends the real peer address and is the only way to reach Next.js, and list that proxy and the Next.js host in `ENERGYIQ_FORWARDED_ALLOW_IPS`. Unlike `ENERGYIQ_API_ORIGIN`, it is read per request, so one build serves both setups; `pnpm build` and `pnpm start` fail naming it when it is unset in production. `node frontend/scripts/check-edge-proxy.mjs` reruns the live check with an echo server in place of FastAPI.
+
 Checks: `pnpm lint`, `pnpm typecheck`, `pnpm test`, `pnpm format:check`, and `pnpm build`. After a backend API change, regenerate the OpenAPI snapshot (`ENERGYIQ_UPDATE_SNAPSHOTS=1 uv run pytest backend/tests/api/test_openapi.py`), then run `pnpm gen:api` and commit both; `pnpm test` fails while the generated client is stale.
 
 ### Run the API server
@@ -189,7 +191,7 @@ P2-05 added the Phase 2 gate tests: route enumerated cross user, unauthenticated
 
 The Phase 2 gate passed on 2026-11-04 after a fresh model code review ([roadmap](docs/05-IMPLEMENTATION-ROADMAP.md)).
 
-**Next up:** P3-01, the Next.js setup, typed API layer, and session strategy. Reading semantics and discontinuity rules are documented in [12-METER-SEMANTICS](docs/12-METER-SEMANTICS.md) (P1-06).
+**Next up:** finish P3-01 (`/check verify` of the AC-18 address handling, then a fresh model review), then P3-02. P3-01 is the Next.js setup, typed API layer, and session strategy. Reading semantics and discontinuity rules are documented in [12-METER-SEMANTICS](docs/12-METER-SEMANTICS.md) (P1-06).
 
 ## Documentation
 
