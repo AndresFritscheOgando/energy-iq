@@ -72,7 +72,15 @@ class InvoiceRevisionRow(Base):
     energy_charge_dop: Mapped[Decimal | None] = mapped_column(Numeric(16, 2))
     issue_date: Mapped[date | None] = mapped_column(Date)
     due_date: Mapped[date | None] = mapped_column(Date)
-    source_document_id: Mapped[UUID | None] = mapped_column(Uuid)
+    source_document_id: Mapped[UUID | None] = mapped_column(
+        Uuid,
+        ForeignKey(
+            "source_documents.id",
+            ondelete="RESTRICT",
+            name="fk_invoice_revisions_source_document",
+        ),
+        index=True,
+    )
     field_origins: Mapped[dict[str, str]] = mapped_column(JSONB)
     previous_revision_id: Mapped[UUID | None] = mapped_column(
         Uuid,

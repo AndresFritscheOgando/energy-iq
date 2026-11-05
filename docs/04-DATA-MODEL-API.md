@@ -55,7 +55,7 @@ These are local function contracts, not HTTP endpoints. P2-01 maps them to HTTP
 | `POST/GET /meters/{id}/events`, `POST /meters/{id}/events/{event_id}/approve`, `POST /meters/{id}/events/{event_id}/reject` | Record and decide meter events | 2 (P2-04, built) |
 | `GET /meters/{id}/consumption?from=&to=` | Measured interval usage and coverage from stored data | 2 (P2-04, built) |
 | `POST/GET /meters/{id}/invoices`, `GET /invoices/{id}`, `POST /invoices/{id}/revisions`, `POST /invoices/{id}/confirm` | Owner scoped manual drafts, explicit confirmation, immutable corrected revisions, and overlap rejection; P4-01 built from [spec 0012](specs/0012-phase-four-bill-intelligence/index.md) | 4 |
-| `POST /meters/{id}/documents`, `GET /documents/{id}`, `GET /documents/{id}/source`, `POST /documents/{id}/retry`, `DELETE /documents/{id}`, `GET /documents/{id}/extractions` | Private PDF upload, source, job status, retry, deletion, and proposals; proposed in spec 0012, not built | 4 |
+| `POST /meters/{id}/documents`, `GET /documents/{id}`, `GET /documents/{id}/source`, `POST /documents/{id}/retry`, `DELETE /documents/{id}`, `GET /documents/{id}/extractions` | Private PDF upload, source, run status, retry, and deletion built from spec 0012 child 0002 (P4-02); `GET /documents/{id}/extractions` proposals proposed, not built | 4 |
 | `GET /meters/{id}/reconciliation` | Billed and measured kWh comparison, and a cited estimate when supported; proposed in spec 0012, not built | 4 |
 | `GET /meters/{id}/forecast`, `GET /meters/{id}/anomalies` | Analytics | 5 |
 | `POST /ai/questions` | Evidence-grounded question | 6 |

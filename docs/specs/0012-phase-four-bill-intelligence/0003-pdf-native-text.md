@@ -13,7 +13,7 @@ Extract text from each PDF page and retain evidence that a person can inspect. A
 
 ## Decision
 
-Start with `pypdf` for page text and native text spans. Record page and quote offsets as mandatory evidence; a bounding box is optional because text geometry is not consistently reliable across PDFs. Put parsing behind a small adapter and process boundary. Evaluate a local OCR or vision candidate only after the native baseline, and keep manual entry available meanwhile.
+Start with `pypdf` (pin at 6.6.2 or later, which fixes CVE-2026-24688, and verify Python 3.13 support and the exact version at build time) for page text and native text spans. It is pure Python with a permissive license. The runner up is `pypdfium2`, which handles odd files more robustly but is native code and so a larger attack surface; reconsider it only if the baseline corpus shows `pypdf` missing text that it finds. `PyMuPDF` is excluded for its AGPL license. Parse only inside the child process defined in child 0002, using its page, text, CPU, wall clock, and memory limits. The adapter reads pages one at a time and stops as soon as the page or text limit is passed. It rejects an encrypted file without trying a password. Record page and quote offsets as mandatory evidence; a bounding box is optional because text geometry is not consistently reliable across PDFs. Put parsing behind a small adapter and process boundary. Evaluate a local OCR or vision candidate only after the native baseline, and keep manual entry available meanwhile.
 
 ## Feature design
 

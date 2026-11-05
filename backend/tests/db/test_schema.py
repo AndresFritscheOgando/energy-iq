@@ -28,6 +28,8 @@ TABLES = {
     "invoices",
     "invoice_revisions",
     "invoice_current_periods",
+    "source_documents",
+    "extraction_runs",
 }
 
 CONSTRAINTS = {
@@ -86,6 +88,23 @@ CONSTRAINTS = {
     "ck_invoice_revisions_billed_kwh_nonnegative",
     "ck_invoice_revisions_total_nonnegative",
     "ck_invoice_revisions_energy_nonnegative",
+    "fk_invoice_revisions_source_document",
+    "pk_source_documents",
+    "uq_source_documents_storage_key",
+    "fk_source_documents_owner_id_users",
+    "fk_source_documents_property_id_properties",
+    "fk_source_documents_meter_id_meters",
+    "ck_source_documents_sha256_length",
+    "ck_source_documents_mime_type",
+    "ck_source_documents_size_positive",
+    "ck_source_documents_purge_after_delete",
+    "pk_extraction_runs",
+    "fk_runs_document",
+    "uq_extraction_runs_number",
+    "ck_extraction_runs_state",
+    "ck_extraction_runs_attempts_nonnegative",
+    "ck_extraction_runs_running_has_lease",
+    "ck_extraction_runs_failed_has_code",
     "pk_invoice_current_periods",
     "fk_invoice_periods_invoice",
     "fk_invoice_periods_meter",
@@ -128,6 +147,17 @@ INDEXES = {
     "ix_invoice_revisions_invoice_id",
     "ix_invoice_revisions_actor_id",
     "ix_invoice_revisions_previous_revision_id",
+    "ix_invoice_revisions_source_document_id",
+    "pk_source_documents",
+    "uq_source_documents_storage_key",
+    "ix_source_documents_owner_id",
+    "ix_source_documents_property_id",
+    "ix_source_documents_meter_id",
+    "pk_extraction_runs",
+    "uq_extraction_runs_number",
+    "ix_extraction_runs_document_id",
+    "uq_extraction_runs_active_document",
+    "ix_extraction_runs_claim",
     "uq_invoice_revisions_number",
     "pk_invoice_current_periods",
     "ix_invoice_current_periods_meter_id",
@@ -146,6 +176,23 @@ PARTIAL_UNIQUE_INDEXES = {
 }
 
 COLUMN_UPDATES = {
+    ("source_documents", "deleted_at"),
+    ("source_documents", "purged_at"),
+    *(
+        ("extraction_runs", name)
+        for name in (
+            "state",
+            "attempts",
+            "lease_owner",
+            "lease_expires_at",
+            "error_code",
+            "started_at",
+            "finished_at",
+            "model",
+            "prompt_version",
+            "output",
+        )
+    ),
     ("invoices", "current_revision_id"),
     ("invoice_revisions", "status"),
     ("invoice_revisions", "confirmed_at"),
@@ -284,7 +331,7 @@ def test_every_foreign_key_restricts_deletes_and_is_indexed(
             {"tables": list(TABLES)},
         ).all()
 
-    assert len(rows) == 19
+    assert len(rows) == 24
     for name, delete_rule, column, table, indexed in rows:
         assert delete_rule == "r", f"{name} is not ON DELETE RESTRICT"
         assert indexed, f"{table}.{column} ({name}) has no leading index"

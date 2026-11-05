@@ -39,7 +39,9 @@ class AuditEventRow(Base):
     __table_args__ = (Index("ix_audit_events_entity", entity_type, entity_id),)
 
 
-EntityType = Literal["user", "property", "meter", "reading", "meter_event", "invoice"]
+EntityType = Literal[
+    "user", "property", "meter", "reading", "meter_event", "invoice", "document"
+]
 
 AuditAction = Literal[
     "auth.register",
@@ -60,6 +62,9 @@ AuditAction = Literal[
     "invoice.create",
     "invoice.correct",
     "invoice.confirm",
+    "document.upload",
+    "document.retry",
+    "document.delete",
 ]
 
 

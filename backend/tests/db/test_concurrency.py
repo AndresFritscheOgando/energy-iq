@@ -362,6 +362,15 @@ IDEMPOTENT: dict[tuple[str, str], Replayable] = {
 }
 
 
+# Spec 0012/0002 routes take multipart or DELETE requests, which this JSON POST
+# matrix cannot send; ``tests/db/test_documents.py`` replays each of them.
+REPLAYED_ELSEWHERE = {
+    ("POST", f"{V1}/meters/{{meter_id}}/documents"),
+    ("POST", f"{V1}/documents/{{document_id}}/retry"),
+    ("DELETE", f"{V1}/documents/{{document_id}}"),
+}
+
+
 def test_every_idempotent_route_is_in_the_replay_matrix() -> None:
     served = {
         route.key
@@ -369,7 +378,8 @@ def test_every_idempotent_route_is_in_the_replay_matrix() -> None:
         if "idempotent" in route.calls
     }
 
-    assert served == set(IDEMPOTENT)
+    assert served - REPLAYED_ELSEWHERE == set(IDEMPOTENT)
+    assert REPLAYED_ELSEWHERE <= served
 
 
 @pytest.mark.db_commit

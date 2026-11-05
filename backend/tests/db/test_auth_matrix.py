@@ -30,6 +30,7 @@ def _path(route: ApiRoute) -> str:
         reading_id=uuid4(),
         event_id=uuid4(),
         invoice_id=uuid4(),
+        document_id=uuid4(),
     )
 
 

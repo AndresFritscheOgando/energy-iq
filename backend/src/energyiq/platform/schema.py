@@ -13,6 +13,7 @@ MODEL_MODULES = (
     "energyiq.properties.models",
     "energyiq.readings.persistence.rows",
     "energyiq.invoices.models",
+    "energyiq.documents.models",
 )
 
 

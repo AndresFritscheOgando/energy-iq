@@ -16,6 +16,7 @@ services:
     environment:
       POSTGRES_USER: postgres
       POSTGRES_DB: postgres
+    networks: [default, internal]
     ports:
       - "127.0.0.1:5432:5432"
     volumes:
@@ -28,5 +29,46 @@ services:
       retries: 10
       start_period: 10s
 
+  # Spec 0012/0002: the extraction worker. Start it with
+  #   docker compose -f infra/compose.yaml --profile worker up -d worker
+  # It joins only the internal network (PostgreSQL and nothing else), so it has
+  # no route to the internet. It is the only service that mounts the documents.
+  worker:
+    profiles: ["worker"]
+    build:
+      context: ..
+      dockerfile: infra/worker.Dockerfile
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    env_file:
+      - path: .env
+        required: true
+    environment:
+      ENERGYIQ_ENV: dev
+      ENERGYIQ_WORKER_ISOLATION: container
+      ENERGYIQ_DOCUMENT_ROOT: /var/lib/energyiq/documents
+      ENERGYIQ_DATABASE_URL: postgresql+psycopg://energyiq_app:${ENERGYIQ_APP_PASSWORD}@db:5432/energyiq_dev
+    user: "10001:10001"
+    read_only: true
+    tmpfs:
+      - /tmp:size=64m,mode=1777
+    cap_drop: [ALL]
+    security_opt:
+      - no-new-privileges:true
+    mem_limit: 1g
+    pids_limit: 64
+    networks: [internal]
+    volumes:
+      - energyiq-documents:/var/lib/energyiq/documents
+
+networks:
+  # No gateway: containers on it cannot reach the internet. ``db`` also stays on
+  # the default network so its loopback port mapping keeps working.
+  internal:
+    internal: true
+
 volumes:
+  energyiq-documents:
   energyiq-pgdata:

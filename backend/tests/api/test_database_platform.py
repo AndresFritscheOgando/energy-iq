@@ -155,8 +155,9 @@ def test_secrets_never_render(prod_secrets: dict[str, str]) -> None:
     settings = Settings(env="prod")
     rendered = f"{settings!r} {settings} {settings.model_dump()}"
 
-    for value in prod_secrets.values():
-        assert value not in rendered
+    for name, value in prod_secrets.items():
+        if name != "ENERGYIQ_DOCUMENT_ROOT":  # a directory, not a secret
+            assert value not in rendered
 
 
 def _run_db_test(extra_env: dict[str, str]) -> subprocess.CompletedProcess[str]:

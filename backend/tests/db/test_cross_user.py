@@ -70,6 +70,12 @@ ID_ROUTES: dict[tuple[str, str], Call] = {
     ("POST", f"{V1}/invoices/{{invoice_id}}/confirm"): Call(
         {"draft_revision_id": str(uuid4()), "expected_current_revision_id": None}
     ),
+    # Spec 0012/0002: the upload route answers 404 before it reads the body.
+    ("POST", f"{V1}/meters/{{meter_id}}/documents"): Call(),
+    ("GET", f"{V1}/documents/{{document_id}}"): Call(),
+    ("GET", f"{V1}/documents/{{document_id}}/source"): Call(),
+    ("POST", f"{V1}/documents/{{document_id}}/retry"): Call(),
+    ("DELETE", f"{V1}/documents/{{document_id}}"): Call(),
 }
 
 # Every paginated list: the attribute of ``Holdings`` naming its parent id
@@ -147,7 +153,14 @@ def _send(
 def _random_ids() -> dict[str, str]:
     return {
         name: str(uuid4())
-        for name in ("property_id", "meter_id", "reading_id", "event_id", "invoice_id")
+        for name in (
+            "property_id",
+            "meter_id",
+            "reading_id",
+            "event_id",
+            "invoice_id",
+            "document_id",
+        )
     }
 
 

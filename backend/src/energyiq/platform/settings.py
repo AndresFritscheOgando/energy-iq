@@ -2,6 +2,7 @@
 
 import ipaddress
 from collections.abc import Mapping
+from pathlib import Path
 from typing import Annotated, Any, Literal
 
 from pydantic import (
@@ -28,6 +29,13 @@ _LOCAL_DATABASES: Mapping[str, str] = {"dev": "energyiq_dev", "test": "energyiq_
 _LOCAL_APP_PASSWORD = "energyiq-local-app"
 _LOCAL_MIGRATOR_PASSWORD = "energyiq-local-migrator"
 LOCAL_SECRET_KEY = "energyiq-local-secret-key-synthetic-not-for-prod"
+# Private document directory for dev and test (git ignored). ``prod`` must name one.
+LOCAL_DOCUMENT_ROOT = Path(__file__).resolve().parents[4] / ".local" / "documents"
+
+MIB = 1024 * 1024
+# Spec 0012/0002: each limit has a default and a hard ceiling, so a typo
+# cannot disable a cap. The lease must outlast the parser wall clock limit.
+LEASE_MARGIN_SECONDS = 30
 
 # Marks a secret nobody set. A plain required field would make every
 # ``Settings(env="test")`` call a type error, so the fields default to this
@@ -98,12 +106,28 @@ class Settings(BaseSettings):
     # but must be written out; unset fails there.
     forwarded_allow_ips: list[str] = Field(default=_UNSET_ENV, validate_default=True)
 
+    # Spec 0012/0002: private source PDFs and the bounded extraction worker.
+    document_root: Path = Field(default=_UNSET_ENV, validate_default=True)
+    worker_isolation: Literal["container", "none"] = "container"
+    upload_max_bytes: Annotated[int, Field(gt=0, le=20 * MIB)] = 5 * MIB
+    pdf_max_pages: Annotated[int, Field(gt=0, le=50)] = 10
+    pdf_max_text_bytes: Annotated[int, Field(gt=0, le=MIB)] = 256 * 1024
+    pdf_cpu_seconds: Annotated[int, Field(gt=0, le=60)] = 20
+    pdf_wall_seconds: Annotated[int, Field(gt=0, le=120)] = 30
+    pdf_memory_bytes: Annotated[int, Field(gt=0, le=2048 * MIB)] = 768 * MIB
+    run_max_attempts: Annotated[int, Field(gt=0, le=5)] = 2
+    doc_max_runs: Annotated[int, Field(gt=0, le=10)] = 3
+    worker_concurrency: Annotated[int, Field(gt=0, le=4)] = 1
+    owner_max_active_docs: Annotated[int, Field(gt=0, le=10)] = 3
+    run_lease_seconds: Annotated[int, Field(gt=0, le=600)] = 90
+
     @field_validator(
         "env",
         "database_url",
         "migration_database_url",
         "secret_key",
         "forwarded_allow_ips",
+        "document_root",
         mode="before",
     )
     @classmethod
@@ -140,6 +164,17 @@ class Settings(BaseSettings):
                 ) from None
         return value
 
+    @model_validator(mode="after")
+    def _lease_outlasts_parser(self) -> "Settings":
+        """A lease at or below the wall clock limit plus margin would let a
+        second worker claim a run whose parser is still alive."""
+        if self.run_lease_seconds <= self.pdf_wall_seconds + LEASE_MARGIN_SECONDS:
+            raise PydanticCustomError(
+                "lease_too_short",
+                "run_lease_seconds must exceed pdf_wall_seconds plus 30",
+            )
+        return self
+
     @model_validator(mode="before")
     @classmethod
     def _environment_defaults(cls, data: dict[str, Any]) -> dict[str, Any]:
@@ -148,6 +183,7 @@ class Settings(BaseSettings):
         defaults: dict[str, Any] = {
             "cors_origins": [] if env == "prod" else list(DEV_CORS_ORIGINS),
             "session_cookie_secure": env == "prod",
+            "worker_isolation": "container" if env == "prod" else "none",
         }
         if env != "prod":
             defaults["trusted_origins"] = list(DEV_TRUSTED_ORIGINS)
@@ -155,4 +191,5 @@ class Settings(BaseSettings):
             defaults["database_url"] = local_database_url(env)
             defaults["migration_database_url"] = local_database_url(env, migrator=True)
             defaults["secret_key"] = LOCAL_SECRET_KEY
+            defaults["document_root"] = LOCAL_DOCUMENT_ROOT
         return {**defaults, **data}
