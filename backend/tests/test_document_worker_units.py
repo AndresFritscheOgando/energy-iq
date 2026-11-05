@@ -232,3 +232,78 @@ def test_a_discarded_temp_file_is_gone_and_foreign_names_are_ignored(
     assert not temp.exists()
     assert list(store.keys()) == []
     assert os.listdir(tmp_path / "tmp") == []
+
+
+PARENT_SCRIPT = """
+import subprocess, sys
+
+if sys.argv[1] == "harden":
+    from energyiq.worker.sandbox import make_parent_non_dumpable
+
+    assert make_parent_non_dumpable()
+child = subprocess.run(
+    [sys.executable, "-I", sys.argv[2]], capture_output=True, text=True, timeout=30
+)
+print(child.stdout.strip())
+"""
+
+CHILD_SCRIPT = """
+import os
+
+try:
+    data = open(f"/proc/{os.getppid()}/environ", "rb").read()
+except PermissionError:
+    print("DENIED")
+else:
+    print("READ" if b"SECRET_PROBE=hunter2" in data else "EMPTY")
+"""
+
+
+def _probe(mode: str, tmp_path: Path) -> str:
+    import subprocess
+
+    parent = tmp_path / "parent.py"
+    child = tmp_path / "child.py"
+    parent.write_text(PARENT_SCRIPT, encoding="utf-8")
+    child.write_text(CHILD_SCRIPT, encoding="utf-8")
+    result = subprocess.run(
+        [sys.executable, str(parent), mode, str(child)],
+        capture_output=True,
+        text=True,
+        env={
+            **os.environ,
+            "PYTHONPATH": str(Path(__file__).parents[1] / "src"),
+            "SECRET_PROBE": "hunter2",
+        },
+        check=False,
+        timeout=60,
+    )
+    assert result.returncode == 0, result.stderr
+    return result.stdout.strip()
+
+
+def test_the_probe_scripts_are_valid_python() -> None:
+    """Runs everywhere, so a broken probe cannot hide behind the Linux skip."""
+    compile(PARENT_SCRIPT, "parent", "exec")
+    compile(CHILD_SCRIPT, "child", "exec")
+
+
+LINUX_NON_ROOT = pytest.mark.skipif(
+    not sys.platform.startswith("linux") or getattr(os, "geteuid", lambda: 0)() == 0,
+    reason="needs a non root Linux user (root may hold CAP_SYS_PTRACE)",
+)
+
+
+@LINUX_NON_ROOT
+def test_a_same_uid_child_reads_the_parent_environ_without_the_flag(
+    tmp_path: Path,
+) -> None:
+    """Control run: proves the probe can see the secret when nothing protects it."""
+    assert _probe("plain", tmp_path) == "READ"
+
+
+@LINUX_NON_ROOT
+def test_a_non_dumpable_parent_hides_its_environ_from_a_same_uid_child(
+    tmp_path: Path,
+) -> None:
+    assert _probe("harden", tmp_path) == "DENIED"

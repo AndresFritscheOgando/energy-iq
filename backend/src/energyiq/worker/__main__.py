@@ -16,6 +16,7 @@ from energyiq.platform.db import build_engine, session_factory
 from energyiq.platform.logging import configure_logging
 from energyiq.platform.settings import Settings
 from energyiq.worker.runner import Worker, check_isolation
+from energyiq.worker.sandbox import make_parent_non_dumpable
 
 EXIT_CONFIG = 2
 
@@ -30,6 +31,13 @@ def main() -> int:
         return EXIT_CONFIG
     except RuntimeError as exc:
         print(str(exc), file=sys.stderr)
+        return EXIT_CONFIG
+    if (
+        settings.worker_isolation == "container"
+        and sys.platform.startswith("linux")
+        and not make_parent_non_dumpable()
+    ):
+        print("worker cannot become non dumpable", file=sys.stderr)
         return EXIT_CONFIG
     configure_logging(settings.log_level)
     engine = build_engine(settings)

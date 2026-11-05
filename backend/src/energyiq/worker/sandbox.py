@@ -47,6 +47,30 @@ class ChildResult:
     pages: tuple[ParsedPage, ...] = ()
 
 
+_PR_SET_DUMPABLE = 4
+_PR_GET_DUMPABLE = 3
+
+
+def make_parent_non_dumpable() -> bool:
+    """Block same uid reads of this process's ``/proc`` files and ptrace.
+
+    The parse child runs under the same uid as the worker parent, so without
+    this it could read ``/proc/<ppid>/environ`` (database URL and password) or
+    attach to the parent. A non dumpable process makes those files root owned.
+    Returns True when the flag is set. Returns False where the call does not
+    exist (Windows, macOS, development only) or when it fails; the worker then
+    exits 2 in container mode on Linux.
+    """
+    if not sys.platform.startswith("linux"):
+        return False
+    import ctypes
+
+    libc = ctypes.CDLL(None, use_errno=True)
+    if libc.prctl(_PR_SET_DUMPABLE, 0, 0, 0, 0) != 0:
+        return False
+    return libc.prctl(_PR_GET_DUMPABLE, 0, 0, 0, 0) == 0
+
+
 def _environment() -> dict[str, str]:
     """Empty on POSIX. Windows cannot start Python without ``SYSTEMROOT``."""
     if _WINDOWS:
