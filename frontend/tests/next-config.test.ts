@@ -36,6 +36,10 @@ describe("next.config", () => {
     expect(nextConfig(PHASE_DEVELOPMENT_SERVER).allowedDevOrigins).toContain("127.0.0.1");
   });
 
+  it("matches routes case sensitively so /API cannot bypass proxy.ts (AC-18)", () => {
+    expect(nextConfig(PHASE_DEVELOPMENT_SERVER).experimental?.caseSensitiveRoutes).toBe(true);
+  });
+
   it("rewrites /api to the dev default origin outside production", async () => {
     vi.stubEnv("ENERGYIQ_API_ORIGIN", "");
     const config = nextConfig(PHASE_DEVELOPMENT_SERVER);

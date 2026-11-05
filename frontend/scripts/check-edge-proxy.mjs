@@ -85,6 +85,20 @@ try {
       await fetch(url, { headers: { "x-forwarded-for": "6.6.6.6" } });
       const [plain, spoofed] = received.slice(-2);
 
+      // Letter case variants must never reach the backend with a spoofed header.
+      received.length = 0;
+      for (const path of ["/API/v1/auth/me", "/Api/v1/auth/me"]) {
+        await fetch(`http://127.0.0.1:${NEXT_PORT}${path}`, {
+          headers: { "x-forwarded-for": "6.6.6.6" },
+        });
+      }
+      const caseVariants = [...received];
+      check(
+        `${mode}: /API and /Api never deliver a spoofed header to the backend`,
+        !caseVariants.includes("6.6.6.6"),
+        JSON.stringify(caseVariants),
+      );
+
       if (mode === "false") {
         check("false: plain request arrives with no header", plain === null, String(plain));
         check("false: spoofed 6.6.6.6 is dropped", spoofed === null, String(spoofed));

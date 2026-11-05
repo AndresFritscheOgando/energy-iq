@@ -74,6 +74,11 @@ const buildConfig = (phase: string): NextConfig => ({
   // the page never hydrates, and the form falls back to a native submit.
   allowedDevOrigins: ["127.0.0.1"],
   reactCompiler: true,
+  // Spec 0010 AC-18: rewrites match paths ignoring letter case by default, but
+  // the `proxy.ts` matcher is case sensitive, so `/API/...` would reach FastAPI
+  // with the browser's X-Forwarded-For untouched. Case sensitive routes make
+  // both agree: `/API/...` is simply not found.
+  experimental: { caseSensitiveRoutes: true },
   turbopack: {
     rules: {
       "*.css": {
