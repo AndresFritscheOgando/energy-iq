@@ -13,7 +13,7 @@
  */
 import "server-only";
 
-import { QueryClient, type QueryKey } from "@tanstack/react-query";
+import { QueryClient, type DataTag, type QueryKey } from "@tanstack/react-query";
 import { cookies } from "next/headers";
 import { notFound, redirect } from "next/navigation";
 import { cache } from "react";
@@ -130,7 +130,7 @@ export type LoadResult<T> =
  * they run after the `try`, never inside it.
  */
 export async function loadOrNotFound<T>(
-  options: { queryKey: QueryKey },
+  options: { queryKey: DataTag<QueryKey, T, unknown> },
   path: string,
   searchParams: SearchParams = {},
 ): Promise<LoadResult<T>> {

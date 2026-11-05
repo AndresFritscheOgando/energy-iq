@@ -46,7 +46,7 @@ export function AppPage({ breadcrumb, title, titleAside, children }: Props) {
           <nav aria-label="Breadcrumb">
             <ol className="flex flex-wrap items-center gap-1.5 text-[13px] leading-5">
               {breadcrumb.map((crumb, index) => (
-                <li key={crumb.label} className="flex items-center gap-1.5">
+                <li key={`${index}-${crumb.label}`} className="flex items-center gap-1.5">
                   {index > 0 && (
                     <span aria-hidden="true" className="text-muted-foreground">
                       /

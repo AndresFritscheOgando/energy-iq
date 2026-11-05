@@ -8,7 +8,7 @@
  */
 import { Clock, CircleAlert, Info, RotateCw } from "lucide-react";
 import Link from "next/link";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button, buttonVariants } from "@/components/ui/button";
@@ -183,6 +183,10 @@ export function UsageSection({ meterId, zone, range, window, canAddReadings }: P
   // The window is the server's prop, never recomputed here: one query key.
   const query = useStoredConsumption(meterId, window);
   const [selected, setSelected] = useState<{ modelKey: number; index: number } | null>(null);
+  const model = useMemo(
+    () => (query.data ? toChartModel(query.data, zone) : null),
+    [query.data, zone],
+  );
 
   const header = (
     <div className="flex flex-wrap items-center justify-between gap-3">
@@ -203,7 +207,7 @@ export function UsageSection({ meterId, zone, range, window, canAddReadings }: P
   }
 
   const data = query.data;
-  if (!data) {
+  if (!data || !model) {
     return (
       <section aria-label={en.usage.title} className={sectionClass}>
         {header}
@@ -241,6 +245,13 @@ export function UsageSection({ meterId, zone, range, window, canAddReadings }: P
           {canAddReadings && (
             <a
               href="#reading-value"
+              onClick={(event) => {
+                const field = document.getElementById("reading-value");
+                if (field) {
+                  event.preventDefault();
+                  field.focus();
+                }
+              }}
               className={buttonVariants({ variant: "outline", className: "mt-1" })}
             >
               {en.usage.needsLink}
@@ -251,7 +262,6 @@ export function UsageSection({ meterId, zone, range, window, canAddReadings }: P
     );
   }
 
-  const model = toChartModel(data, zone);
   const modelKey = query.dataUpdatedAt;
   const selectedIndex =
     selected !== null && selected.modelKey === modelKey && selected.index < model.segments.length

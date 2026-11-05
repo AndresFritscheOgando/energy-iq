@@ -5,9 +5,8 @@
  * model and nothing else is drawn. Loaded with `ssr: false`, because Recharts
  * needs a browser to measure, and only the meter page pays for its bundle.
  */
-import { useId } from "react";
+import { useId, useMemo } from "react";
 import {
-  Area,
   CartesianGrid,
   ComposedChart,
   Line,
@@ -123,6 +122,11 @@ export default function UsageChart({ model, selectedKey, stale }: Props) {
   const id = useId().replace(/[^a-zA-Z0-9]/g, "");
   const gapId = `hatch-gap-${id}`;
   const invalidId = `hatch-invalid-${id}`;
+  // One component per kind, so a re-render does not remount every band.
+  const shapes = useMemo(
+    () => ({ gap: bandShape(false, gapId, invalidId), invalid: bandShape(true, gapId, invalidId) }),
+    [gapId, invalidId],
+  );
   const measuredColor = stale ? "var(--muted-foreground)" : "var(--chart-measured)";
   const domain: [number, number] = [model.windowStartMs, model.windowEndMs];
   // With nothing measured the axes still need data to lay out against.
@@ -218,20 +222,9 @@ export default function UsageChart({ model, selectedKey, stale }: Props) {
             y2={model.yTop}
             ifOverflow="visible"
             className={band.invalid ? "chart-band chart-band--invalid" : "chart-band"}
-            shape={bandShape(band.invalid, gapId, invalidId)}
+            shape={band.invalid ? shapes.invalid : shapes.gap}
           />
         ))}
-        <Area
-          dataKey="y"
-          type="linear"
-          connectNulls={false}
-          dot={false}
-          activeDot={false}
-          stroke="none"
-          fill={measuredColor}
-          fillOpacity={0.2}
-          isAnimationActive={false}
-        />
         <Line
           className="chart-step"
           dataKey="y"

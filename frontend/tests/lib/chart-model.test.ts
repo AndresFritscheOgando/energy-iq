@@ -333,3 +333,23 @@ describe("segmentIndexAtX", () => {
     expect(segmentIndexAtX(segments, -50, 1000, start, end)).toBeNull();
   });
 });
+
+describe("a measured interval with no usable rate", () => {
+  it("is not plotted, so it never reads as zero use", () => {
+    const model = toChartModel(
+      {
+        window: WINDOW,
+        intervals: [
+          interval("2026-10-05T16:00:00Z", "2026-10-12T16:00:00Z", "x", "1", "P7D", {
+            kwh_per_day: null,
+          }),
+        ],
+        gaps: [],
+      },
+      SD,
+    );
+    expect(model.segments[0].y).toBeNull();
+    expect(model.segments[0].kind).toBe("step");
+    expect(model.points.every((point) => point.y === null)).toBe(true);
+  });
+});

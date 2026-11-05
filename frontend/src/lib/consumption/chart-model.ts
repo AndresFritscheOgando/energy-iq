@@ -146,7 +146,8 @@ export function toChartModel(response: ConsumptionData, zone: string): ChartMode
   const stepEntries = measured.map((interval) => {
     const rate = interval.kwh_per_day === null ? null : parseDecimal(interval.kwh_per_day);
     const zero = rate !== null && isZeroDecimal(rate);
-    const y = interval.kwh_per_day === null ? 0 : Number(interval.kwh_per_day);
+    // An unknown or unreadable rate is not plotted: a break, never a zero.
+    const y = rate === null ? null : Number(interval.kwh_per_day);
     const length = formatLength(interval.duration) ?? notAvailable;
     const note = en.usage.averageOver(length);
     const rateText = twoPlaces(interval.kwh_per_day);
@@ -159,7 +160,7 @@ export function toChartModel(response: ConsumptionData, zone: string): ChartMode
         kind,
         startMs: Date.parse(interval.start),
         endMs: Date.parse(interval.end),
-        y: Number.isFinite(y) ? y : 0,
+        y: y !== null && Number.isFinite(y) ? y : null,
         kindLabel: zero ? en.usage.kindZero : en.usage.kindMeasured,
         span,
         readout: en.usage.readoutStep(span, rateText, kwhText, note.toLowerCase()),
