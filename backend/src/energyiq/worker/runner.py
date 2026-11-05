@@ -24,6 +24,7 @@ from sqlalchemy import CursorResult, or_, select, update
 from sqlalchemy.orm import Session, sessionmaker
 
 from energyiq.documents.models import ExtractionRunRow, SourceDocumentRow
+from energyiq.documents.pdf_text import NORMALIZATION_VERSION, has_native_text
 from energyiq.documents.storage import DocumentStore
 from energyiq.platform.clock import get_now
 from energyiq.platform.logging import ERROR_LOGGER
@@ -153,7 +154,12 @@ class Worker:
                 values.update(
                     state="succeeded",
                     error_code=None,
-                    output={"page_count": result.page_count},
+                    output={
+                        "page_count": result.page_count,
+                        "normalization": NORMALIZATION_VERSION,
+                        "native_text": has_native_text(result.pages),
+                        "pages": [page.to_json() for page in result.pages],
+                    },
                 )
             else:
                 values.update(state="failed", error_code=result.code, output=None)

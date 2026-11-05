@@ -27,7 +27,7 @@ dev = [
 
 [tool.pytest.ini_options]
 testpaths = ["backend/tests"]
-pythonpath = ["backend/src", "backend/tests"]
+pythonpath = ["backend/src", "backend/tests", "backend/evals"]
 addopts = "--import-mode=importlib -rs"
 markers = [
     "db: needs the PostgreSQL test database (skipped when unreachable unless ENERGYIQ_REQUIRE_DB=1)",

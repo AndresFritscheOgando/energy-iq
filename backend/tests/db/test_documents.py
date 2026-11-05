@@ -424,9 +424,10 @@ def test_the_worker_reaches_needs_review_without_creating_an_invoice(
     status = api.get(f"{V1}/documents/{document['id']}").json()
     assert status["state"] == "needs_review" and status["reason_code"] is None
     assert status["run"]["state"] == "succeeded" and status["run"]["attempts"] == 1
-    assert probe.rows("SELECT output FROM extraction_runs")[0]["output"] == {
-        "page_count": 2
-    }
+    output = probe.rows("SELECT output FROM extraction_runs")[0]["output"]
+    assert output["page_count"] == 2 and output["normalization"] == "n1"
+    assert output["native_text"] is False  # blank pages: a scan candidate, no guess
+    assert [p["quality_code"] for p in output["pages"]] == ["empty", "empty"]
     assert probe.one("SELECT count(*) FROM invoices") == 0
     assert probe.one("SELECT count(*) FROM invoice_revisions") == 0
     assert worker.run_once() is False

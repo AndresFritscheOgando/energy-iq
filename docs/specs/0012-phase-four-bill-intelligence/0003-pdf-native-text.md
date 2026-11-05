@@ -25,9 +25,9 @@ Start with `pypdf` (pin at 6.6.2 or later, which fixes CVE-2026-24688, and verif
 
 ## Build plan
 
-1. Add the parser adapter, page text limits, and source span contract, satisfies **AC-1**, **AC-2**.
-2. Run and publish the baseline corpus report, satisfies **AC-3**.
-3. Evaluate a local fallback and enable only one whose result supports it, satisfies **AC-4**.
+1. Add the parser adapter, page text limits, and source span contract, satisfies **AC-1**, **AC-2**. Built 2026-11-05.
+2. Run and publish the baseline corpus report, satisfies **AC-3**. Built 2026-11-05: `backend/evals/native_text.py`, report in `docs/evals/native-text-baseline.md`.
+3. Evaluate a local fallback and enable only one whose result supports it, satisfies **AC-4**. Not run: needs scans with real rendered text and a local candidate. Fallback stays disabled.
 
 ## Consequences
 

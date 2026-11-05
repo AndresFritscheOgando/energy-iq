@@ -23,6 +23,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import IO, Any, cast
 
+from energyiq.documents.pdf_text import ParsedPage, parse_pages
+
 CHILD_SCRIPT = Path(__file__).with_name("pdf_child.py")
 MAX_OUTPUT_BYTES = 1024 * 1024
 _WINDOWS = os.name == "nt"
@@ -42,6 +44,7 @@ class ChildResult:
     ok: bool
     code: str | None = None
     page_count: int | None = None
+    pages: tuple[ParsedPage, ...] = ()
 
 
 def _environment() -> dict[str, str]:
@@ -81,7 +84,7 @@ def _feed(stream: IO[bytes], data: bytes) -> None:
             pass
 
 
-def _parse(raw: bytes) -> ChildResult:
+def _parse(raw: bytes, max_text_bytes: int) -> ChildResult:
     try:
         loaded: object = json.loads(raw)
     except ValueError:
@@ -89,8 +92,18 @@ def _parse(raw: bytes) -> ChildResult:
     if not isinstance(loaded, dict):
         return ChildResult(False, "pdf_parse_failed")
     value = cast("dict[str, Any]", loaded)
-    if value.get("ok") is True and isinstance(value.get("page_count"), int):
-        return ChildResult(True, None, value["page_count"])
+    count = value.get("page_count")
+    if (
+        value.get("ok") is True
+        and isinstance(count, int)
+        and not isinstance(count, bool)
+    ):
+        pages = parse_pages(
+            value.get("pages"), page_count=count, max_text_bytes=max_text_bytes
+        )
+        if pages is None:
+            return ChildResult(False, "pdf_parse_failed")
+        return ChildResult(True, None, count, pages)
     code = value.get("code")
     if value.get("ok") is False and isinstance(code, str):
         return ChildResult(False, code)
@@ -159,7 +172,7 @@ def run_pdf_child(
         return ChildResult(False, "pdf_parse_resource")
     if process.returncode != 0 and not output:
         return ChildResult(False, _crash_code(process.returncode))
-    return _parse(output)
+    return _parse(output, limits.max_text_bytes)
 
 
 def _crash_code(returncode: int) -> str:

@@ -59,7 +59,7 @@ Phase 2 gate passed on 2026-11-04: owner isolated REST CRUD (route enumerated cr
 Design: [spec 0012](specs/0012-phase-four-bill-intelligence/index.md) entered In Progress on 2026-11-05. P4-01 has been built and checked, while the Phase 3 fresh review is still needed before Phase 4 becomes the current implementation phase.
 - P4-01 Manual invoice entry and source preservation. Built 2026-11-05: revision `0004`, owner scoped API, meter page review, exact Decimal values, audit and retry keys, PostgreSQL overlap protection, and a live browser journey. Follow up built 2026-11-05: `POST /invoices/{id}/revisions` now takes a required `base_revision_id`, appends a draft revision to an unconfirmed or open draft invoice, and rejects a stale base with 409, so a partial draft is completed in steps; the meter page has an Edit draft form.
 - P4-02 Safe file upload and extraction job lifecycle.
-- P4-03 PDF native text parsing; evaluate OCR/vision fallback.
+- P4-03 PDF native text parsing; evaluate OCR/vision fallback. Native text built 2026-11-05 (page text, exact evidence spans, safe scan outcome, published synthetic baseline in `docs/evals/`). The OCR or vision evaluation is not run, so no fallback is enabled.
 - P4-04 Introduce Ollama behind strict structured extraction contract.
 - P4-05 Build human corrections and provenance UI.
 - P4-06 Effective-dated tariff rules with official sources; reconciliation and test fixtures.

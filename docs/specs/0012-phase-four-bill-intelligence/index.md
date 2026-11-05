@@ -130,7 +130,7 @@ No project approach is recorded. Use a thin end to end thread through the curren
 ## Follow-up
 
 - [ ] Resolve spec 0011's fresh review before Phase 4 implementation is marked current.
-- [ ] During P4-03, record the native text and OCR or vision benchmark results before enabling any fallback.
+- [ ] During P4-03, record the native text and OCR or vision benchmark results before enabling any fallback. Native baseline recorded 2026-11-05 in `docs/evals/native-text-baseline.md`; the OCR or vision benchmark is still open.
 - [ ] During P4-06, inspect the SIE resolution PDF itself and record its digest, exact tables, rounding, applicability, and fixture derivation before publishing a schedule.
 - [ ] Before deployment, set and verify a private storage backup, owner deletion, and backup expiry policy. The owner may delete a source, but immutable audit metadata without private field values remains.
 - [ ] Add the relevant installed implementation skill pointers to the proper context files through `/sync`.

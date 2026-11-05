@@ -100,6 +100,7 @@ def test_a_valid_pdf_reports_its_page_count() -> None:
     result = run_pdf_child(make_pdf(2), LIMITS)
 
     assert (result.ok, result.page_count, result.code) == (True, 2, None)
+    assert [p.quality_code for p in result.pages] == ["empty", "empty"]
 
 
 @pytest.mark.parametrize(
@@ -163,7 +164,7 @@ def test_the_child_inherits_no_secrets(monkeypatch: pytest.MonkeyPatch) -> None:
     source = (
         "import os, sys; names = [n for n in os.environ if n.startswith('ENERGYIQ')]"
         '; sys.stdout.write(\'{"ok": \' + (\'false, "code": "leaked"\' if names'
-        " else 'true, \"page_count\": 1') + '}')"
+        " else 'true, \"page_count\": 0, \"pages\": []') + '}')"
     )
 
     result = run_pdf_child(b"x", LIMITS, command=_python(source))
