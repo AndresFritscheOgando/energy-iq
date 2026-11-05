@@ -89,6 +89,8 @@ export function readingDate(
 }
 
 type Warning = { id: string; value: string; date: string };
+/** The warning plus the exact values it was raised for, so "Save anyway" saves those. */
+type PendingWarning = Warning & { values: Values };
 
 type Props = {
   meterId: string;
@@ -111,7 +113,9 @@ export function ReadingForm({ meterId, zone, today: initialToday, window, onInac
 
   const [today, setToday] = useState(initialToday);
   const [problem, setProblem] = useState(NO_PROBLEM);
-  const [warning, setWarning] = useState<Warning | null>(null);
+  const [warning, setWarning] = useState<PendingWarning | null>(null);
+  // Bumped on every edit and submit; a lookup that finished for older input is discarded.
+  const inputVersion = useRef(0);
   const [saved, setSaved] = useState(false);
   const alertRef = useRef<HTMLDivElement>(null);
   const warningRef = useRef<HTMLDivElement>(null);
@@ -128,6 +132,7 @@ export function ReadingForm({ meterId, zone, today: initialToday, window, onInac
   const message = (name: Name) => errors[name]?.message ?? problem.fields[name];
 
   const clearMessages = () => {
+    inputVersion.current += 1;
     if (warningFocusFrame.current !== null) {
       cancelAnimationFrame(warningFocusFrame.current);
       warningFocusFrame.current = null;
@@ -207,12 +212,16 @@ export function ReadingForm({ meterId, zone, today: initialToday, window, onInac
     }
     refreshToday();
     clearMessages();
+    const version = inputVersion.current;
     const lower = await lowerThanEarlier(values);
     if (lower === "session_lost") {
       return; // The global handler is already navigating to login.
     }
+    if (version !== inputVersion.current) {
+      return; // The user edited while the lookup ran; this result is for old input.
+    }
     if (lower) {
-      setWarning(lower);
+      setWarning({ ...lower, values });
       const frame = requestAnimationFrame(() => {
         if (warningFocusFrame.current === frame) {
           warningFocusFrame.current = null;
@@ -322,7 +331,7 @@ export function ReadingForm({ meterId, zone, today: initialToday, window, onInac
               . {en.readingForm.warningAfter}
             </p>
             <div className="flex flex-wrap gap-2">
-              <Button type="button" disabled={pending} onClick={() => void save(form.getValues())}>
+              <Button type="button" disabled={pending} onClick={() => void save(warning.values)}>
                 {mutation.isPending ? en.readingForm.pending : en.readingForm.saveAnyway}
               </Button>
               <Button

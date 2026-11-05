@@ -256,6 +256,38 @@ describe("the lower value warning", () => {
     expect(recorded.keys[1]).toBe(recorded.keys[0]);
   });
 
+  it("drops a lookup result when the user edits while it runs, and saves nothing", async () => {
+    let release: () => void = () => {};
+    const gate = new Promise<void>((resolve) => (release = resolve));
+    const recorded = api({
+      lookup: async () => {
+        await gate;
+        return HttpResponse.json({ items: [earlier], next_cursor: null });
+      },
+    });
+    renderForm();
+    const user = userEvent.setup();
+    await user.type(value(), "13012");
+    await user.click(screen.getByRole("button", { name: en.readingForm.submit }));
+    await waitFor(() => expect(recorded.lookups).toHaveLength(1));
+    await user.type(value(), "9"); // edited while the lookup is still running
+    release();
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(screen.queryByRole("button", { name: en.readingForm.saveAnyway })).toBeNull();
+    expect(recorded.posts).toEqual([]);
+    expect(value()).toHaveValue("130129");
+  });
+
+  it("Save anyway saves the values that were warned about", async () => {
+    const recorded = api({ earlier });
+    renderForm();
+    const user = await submit("13012");
+    await user.click(await screen.findByRole("button", { name: en.readingForm.saveAnyway }));
+    await screen.findByText(en.readingForm.saved);
+    expect(recorded.posts).toHaveLength(1);
+    expect(JSON.stringify(recorded.posts[0])).toContain("13012");
+  });
+
   it("Change value clears the warning and returns to the value", async () => {
     const recorded = api({ earlier });
     renderForm();
