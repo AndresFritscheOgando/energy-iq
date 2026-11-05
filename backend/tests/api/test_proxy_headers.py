@@ -87,10 +87,11 @@ def test_junk_forwarded_proto_is_ignored(proto: str) -> None:
     assert seen["scheme"] == "http"
 
 
-def test_single_valid_forwarded_proto_from_trusted_peer_applies() -> None:
-    seen = _seen(_app(), "127.0.0.1", {"X-Forwarded-Proto": "https"})
+@pytest.mark.parametrize("proto", ["https", "http", "ws", "wss"])
+def test_single_valid_forwarded_proto_from_trusted_peer_applies(proto: str) -> None:
+    seen = _seen(_app(), "127.0.0.1", {"X-Forwarded-Proto": proto})
 
-    assert seen["scheme"] == "https"
+    assert seen["scheme"] == proto
 
 
 def test_untrusted_peer_cannot_set_the_scheme() -> None:

@@ -6,6 +6,7 @@
  * and shows which X-Forwarded-For the echo server receives:
  *
  *   false: a plain request and one with a spoofed header both arrive with none.
+ *   X-Forwarded-Proto: false drops a browser value, true keeps it.
  *   true:  a spoofed header arrives as sent; a plain request arrives with the
  *          socket address (Next.js fills it when the browser sent none).
  *
@@ -21,8 +22,10 @@ const ORIGIN = `http://127.0.0.1:${ECHO_PORT}`;
 const isWindows = process.platform === "win32";
 
 const received = [];
+const protos = [];
 const echo = createServer((req, res) => {
   received.push(req.headers["x-forwarded-for"] ?? null);
+  protos.push(req.headers["x-forwarded-proto"] ?? null);
   res.setHeader("content-type", "application/json");
   res.end(JSON.stringify({ xForwardedFor: req.headers["x-forwarded-for"] ?? null }));
 });
@@ -84,6 +87,18 @@ try {
       await fetch(url);
       await fetch(url, { headers: { "x-forwarded-for": "6.6.6.6" } });
       const [plain, spoofed] = received.slice(-2);
+
+      // X-Forwarded-Proto follows the same flag: dropped with false, kept with true.
+      protos.length = 0;
+      await fetch(url, { headers: { "x-forwarded-proto": "https" } });
+      const protoSeen = protos.at(-1);
+      check(
+        mode === "false"
+          ? "false: spoofed X-Forwarded-Proto is dropped"
+          : "true: X-Forwarded-Proto arrives as sent",
+        mode === "false" ? protoSeen === null : protoSeen === "https",
+        String(protoSeen),
+      );
 
       // Letter case variants must never reach the backend with a spoofed header.
       received.length = 0;

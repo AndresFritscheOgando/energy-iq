@@ -226,9 +226,9 @@ class ForwardedClientMiddleware:
     the rightmost ``X-Forwarded-For`` entry that is not itself trusted, and a
     single ``X-Forwarded-Proto`` sets the scheme. Uvicorn accepts ``http``,
     ``https``, ``ws``, and ``wss`` and ignores any other value, including a
-    comma separated list. The Next.js rewrite does not strip this header, so
-    a browser's value reaches FastAPI from the trusted loopback peer; only
-    the edge proxy should be relied on to set it. IPv4 mapped IPv6 peers
+    comma separated list. Next.js ``proxy.ts`` strips a browser's value
+    unless ``ENERGYIQ_EDGE_PROXY=true``, in which case only the edge proxy
+    should be relied on to set it. IPv4 mapped IPv6 peers
     are unmapped first, so ``::ffff:127.0.0.1`` matches ``127.0.0.1``. An
     untrusted peer's headers change nothing. Uvicorn's own proxy header
     handling must be off (``--no-proxy-headers``) so this is the only source.
