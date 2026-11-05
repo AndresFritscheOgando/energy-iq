@@ -1,7 +1,7 @@
 // @vitest-environment node
 /**
- * Spec 0010 AC-18: `src/proxy.ts` decides what X-Forwarded-For may carry to
- * FastAPI. Only the exact text `true` keeps a supplied header.
+ * Spec 0010 AC-18: `src/proxy.ts` decides what X-Forwarded-For and
+ * X-Forwarded-Proto may carry to FastAPI. Only the exact text `true` keeps a supplied header.
  */
 import { NextRequest } from "next/server";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -67,6 +67,31 @@ describe("proxy", () => {
       expect(response.headers.get(OVERRIDE)).not.toContain("x-forwarded-for");
     },
   );
+
+  it.each([undefined, "", "TRUE", "1", "yes", "false"])(
+    "treats %j as false, so a supplied X-Forwarded-Proto is removed",
+    (value) => {
+      vi.stubEnv("ENERGYIQ_EDGE_PROXY", value);
+      const response = proxy(request({ "x-forwarded-proto": "https" }));
+
+      expect(response.headers.get(OVERRIDE)).not.toContain("x-forwarded-proto");
+    },
+  );
+
+  it("false removes a supplied X-Forwarded-Proto", () => {
+    vi.stubEnv("ENERGYIQ_EDGE_PROXY", "false");
+    const response = proxy(request({ "x-forwarded-proto": "https" }));
+
+    expect(response.headers.get(OVERRIDE)).not.toContain("x-forwarded-proto");
+    expect(response.headers.get("x-middleware-request-x-forwarded-proto")).toBeNull();
+  });
+
+  it("true keeps a supplied X-Forwarded-Proto untouched", () => {
+    vi.stubEnv("ENERGYIQ_EDGE_PROXY", "true");
+    const response = proxy(request({ "x-forwarded-proto": "https" }));
+
+    expect(response.headers.get(OVERRIDE)).toBeNull();
+  });
 
   it("never touches other request headers", () => {
     vi.stubEnv("ENERGYIQ_EDGE_PROXY", "false");

@@ -62,6 +62,14 @@ const securityHeaders = [
   },
 ];
 
+/**
+ * Pages are per user, so the browser must not store them (spec 0010 AC-13).
+ * Next.js sets this on dynamic pages already; the explicit rule keeps it true
+ * if a page ever becomes static. Hashed assets under `/_next/` keep their own
+ * immutable caching, and `/api` responses carry FastAPI's headers.
+ */
+const PAGE_SOURCE = "/((?!_next/|api/).*)";
+
 const nextConfig = (phase: string): NextConfig => {
   checkEdgeProxy(phase);
   return buildConfig(phase);
@@ -74,6 +82,11 @@ const buildConfig = (phase: string): NextConfig => ({
   // the page never hydrates, and the form falls back to a native submit.
   allowedDevOrigins: ["127.0.0.1"],
   reactCompiler: true,
+  // Spec 0010 AC-18: rewrites match paths ignoring letter case by default, but
+  // the `proxy.ts` matcher is case sensitive, so `/API/...` would reach FastAPI
+  // with the browser's X-Forwarded-For untouched. Case sensitive routes make
+  // both agree: `/API/...` is simply not found.
+  experimental: { caseSensitiveRoutes: true },
   turbopack: {
     rules: {
       "*.css": {
@@ -91,7 +104,10 @@ const buildConfig = (phase: string): NextConfig => ({
     ];
   },
   async headers() {
-    return [{ source: "/:path*", headers: securityHeaders }];
+    return [
+      { source: "/:path*", headers: securityHeaders },
+      { source: PAGE_SOURCE, headers: [{ key: "Cache-Control", value: "no-store" }] },
+    ];
   },
 });
 
