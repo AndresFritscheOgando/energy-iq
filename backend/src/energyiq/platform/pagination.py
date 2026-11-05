@@ -4,8 +4,8 @@ Query ``limit`` (1 to 500, default 100) and ``cursor``; response
 ``{"items": [...], "next_cursor": string | null}``. The cursor is unpadded
 base64url of compact JSON ``{"k": [<sort key text>, <id>]}``, where the sort
 key text is ``format_utc`` of the timestamp, so it keeps microseconds and
-round trips exactly. A cursor only means "rows after this key"; it is not
-bound to the filters it was issued with.
+round trips exactly. A cursor only means "rows after this key" in the order of
+the request that uses it; it is not bound to the filters it was issued with.
 """
 
 import base64
@@ -132,17 +132,27 @@ def keyset_page[R](
     id_column: QueryableAttribute[UUID],
     key: Callable[[R], tuple[datetime, UUID]],
     params: PageParams,
+    *,
+    descending: bool = False,
 ) -> tuple[Sequence[R], str | None]:
     """Rows after ``params.after`` in ``(sort, id)`` order, plus the next cursor.
 
-    Fetches one extra row to learn whether another page exists, so the last
-    page never carries a cursor.
+    With ``descending`` the order is reversed and "after" means an earlier key;
+    the cursor format is the same either way. Fetches one extra row to learn
+    whether another page exists, so the last page never carries a cursor.
     """
+    row_key = tuple_(sort_column, id_column)
     if params.after is not None:
+        cursor_key = tuple_(params.after.at, params.after.id)
         statement = statement.where(
-            tuple_(sort_column, id_column) > tuple_(params.after.at, params.after.id)
+            row_key < cursor_key if descending else row_key > cursor_key
         )
-    statement = statement.order_by(sort_column, id_column).limit(params.limit + 1)
+    ordering = (
+        (sort_column.desc(), id_column.desc())
+        if descending
+        else (sort_column, id_column)
+    )
+    statement = statement.order_by(*ordering).limit(params.limit + 1)
     rows = session.scalars(statement).all()
     if len(rows) <= params.limit:
         return rows, None

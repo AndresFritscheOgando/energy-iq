@@ -2,7 +2,7 @@
 
 from datetime import UTC, date, datetime, time, timedelta
 from decimal import Decimal
-from typing import Annotated
+from typing import Annotated, Literal
 from uuid import UUID, uuid4
 from zoneinfo import ZoneInfo
 
@@ -235,6 +235,7 @@ def list_readings(
     start: Annotated[UtcInstant | None, Query(alias="from")] = None,
     end: Annotated[UtcInstant | None, Query(alias="to")] = None,
     status: Annotated[ReadingStatus | None, Query()] = None,
+    order: Annotated[Literal["asc", "desc"], Query()] = "asc",
 ) -> Page[ReadingOut]:
     if start is not None and end is not None and start >= end:
         raise _validation("to", "range_order", "to must be after from.")
@@ -248,6 +249,7 @@ def list_readings(
             start,
             end,
             status.value if status else None,
+            descending=order == "desc",
         )
         items = [reading_out(row) for row in rows]
     return Page[ReadingOut](items=items, next_cursor=cursor)

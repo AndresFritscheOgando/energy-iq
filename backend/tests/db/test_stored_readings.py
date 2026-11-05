@@ -1,6 +1,7 @@
 """Stored readings and events through the authenticated API, with synthetic data."""
 
 import logging
+from collections.abc import Callable
 from typing import Any
 from uuid import uuid4
 
@@ -316,3 +317,99 @@ def test_unmapped_reading_integrity_error_drops_postgres_detail(
     )
     assert "uq_some_other_constraint" in logged
     assert "owner@example.test" not in logged
+
+
+# Readings order (spec 0011 child 0001 AC-1) -----------------------------------
+
+
+def _dated_readings(api: TestClient, meter: str, days: int) -> list[str]:
+    """One reading per day, oldest first; returns their ids."""
+    ids: list[str] = []
+    for day in range(1, days + 1):
+        created = api.post(
+            f"{meter}/readings",
+            json={"local_date": f"2026-03-{day:02d}", "cumulative_kwh": f"{100 + day}"},
+        )
+        assert created.status_code == 201, created.text
+        ids.append(created.json()["id"])
+    return ids
+
+
+def _walk(api: TestClient, path: str, **params: Any) -> list[str]:
+    """Follow ``next_cursor`` to the end, returning every id in page order."""
+    seen: list[str] = []
+    cursor: str | None = None
+    while True:
+        query = {**params, **({"cursor": cursor} if cursor else {})}
+        response = api.get(path, params=query)
+        assert response.status_code == 200, response.text
+        body = response.json()
+        seen.extend(row["id"] for row in body["items"])
+        cursor = body["next_cursor"]
+        if cursor is None:
+            return seen
+
+
+@pytest.mark.parametrize("limit", [1, 2, 3, 7, 100])
+def test_desc_paging_returns_every_row_once(
+    api: TestClient, meter: str, limit: int
+) -> None:
+    ids = _dated_readings(api, meter, 7)
+    assert _walk(api, f"{meter}/readings", order="desc", limit=limit) == ids[::-1]
+
+
+def test_default_order_is_ascending_and_matches_asc(
+    api: TestClient, meter: str
+) -> None:
+    ids = _dated_readings(api, meter, 5)
+    path = f"{meter}/readings"
+    assert _walk(api, path, limit=2) == ids
+    assert _walk(api, path, order="asc", limit=2) == ids
+
+
+def test_desc_with_equal_instants_pages_by_id(api: TestClient, meter: str) -> None:
+    """A voided reading shares its instant with its replacement; ``id`` breaks the tie."""
+    path = f"{meter}/readings"
+    first = api.post(path, json={"local_date": "2026-03-01", "cumulative_kwh": "1"})
+    api.patch(f"{path}/{first.json()['id']}", json={"status": "voided"})
+    second = api.post(path, json={"local_date": "2026-03-01", "cumulative_kwh": "2"})
+    assert second.status_code == 201, second.text
+    both = sorted([first.json()["id"], second.json()["id"]], reverse=True)
+    assert _walk(api, path, order="desc", limit=1) == both
+
+
+def test_desc_with_to_status_and_limit_one(api: TestClient, meter: str) -> None:
+    """The lookup the lower value warning sends."""
+    path = f"{meter}/readings"
+    ids = _dated_readings(api, meter, 4)
+    api.patch(f"{path}/{ids[1]}", json={"status": "voided"})
+    # 2026-03-03 noon in Santo Domingo is 16:00Z; `to` is exclusive.
+    params = {
+        "order": "desc",
+        "to": "2026-03-03T16:00:00Z",
+        "status": "valid",
+        "limit": 1,
+    }
+    body = api.get(path, params=params).json()
+    assert [row["id"] for row in body["items"]] == [ids[0]]
+    assert body["next_cursor"] is None
+
+
+def test_unknown_order_is_invalid_enum(api: TestClient, meter: str) -> None:
+    response = api.get(f"{meter}/readings", params={"order": "sideways"})
+    assert response.status_code == 422
+    assert [(e["loc"], e["code"]) for e in response.json()["errors"]] == [
+        (["query", "order"], "invalid_enum")
+    ]
+
+
+def test_desc_on_a_foreign_meter_is_not_found(
+    api: TestClient,
+    meter: str,
+    new_client: Callable[[], TestClient],
+    register: Callable[..., dict[str, Any]],
+) -> None:
+    stranger = new_client()
+    register(stranger, "stranger@example.test")
+    response = stranger.get(f"{meter}/readings", params={"order": "desc"})
+    assert response.status_code == 404

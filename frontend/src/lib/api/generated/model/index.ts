@@ -26,6 +26,7 @@ export * from './intervalStatus';
 export * from './listEventsParams';
 export * from './listMetersParams';
 export * from './listPropertiesParams';
+export * from './listReadingsOrder';
 export * from './listReadingsParams';
 export * from './meterCreate';
 export * from './meterEventStatus';

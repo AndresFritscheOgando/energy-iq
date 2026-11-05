@@ -76,6 +76,9 @@ const nextConfig = (phase: string): NextConfig => {
 };
 
 const buildConfig = (phase: string): NextConfig => ({
+  // Spec 0011 child 0003 AC-3: the end to end suite builds into its own folder,
+  // because the rewrite target is fixed at build time. Output location only.
+  distDir: process.env.ENERGYIQ_NEXT_DIST_DIR || ".next",
   poweredByHeader: false,
   // Spec 0010 AC-12: the dev CSRF message is shown to a tester who opened
   // 127.0.0.1. Without this, Next.js blocks its dev resources for that host,

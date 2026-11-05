@@ -1,0 +1,88 @@
+/*
+ * EnergyIQ design tokens
+ * Spec 0011, product UI for readings and consumption.
+ *
+ * Accent: teal. Amber stays free to mean "check this" (lower-value warning,
+ * dropped reading, out-of-date data), so brand color never collides with
+ * meaning. Neutrals are warm stone at very low chroma.
+ *
+ * The app follows the device theme: there is no .dark class and no toggle.
+ * Names match shadcn/ui. Additions beyond shadcn: --chart-measured,
+ * --chart-gap, --chart-invalid (asked for in the brief) and --warning,
+ * --warning-foreground (needed by the lower-value warning and the
+ * out-of-date marker).
+ *
+ * Contrast ratios for every text and chart pairing are listed in README.md.
+ */
+
+:root {
+  --radius: 0.5rem;
+  --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", sans-serif;
+
+  --background: oklch(0.985 0.003 80);
+  --foreground: oklch(0.21 0.008 65);
+  --card: oklch(0.997 0.002 80);
+  --card-foreground: oklch(0.21 0.008 65);
+  --popover: oklch(0.997 0.002 80);
+  --popover-foreground: oklch(0.21 0.008 65);
+  --primary: oklch(0.47 0.085 195);
+  --primary-foreground: oklch(0.985 0.003 80);
+  --secondary: oklch(0.955 0.005 80);
+  --secondary-foreground: oklch(0.25 0.008 65);
+  --muted: oklch(0.955 0.005 80);
+  --muted-foreground: oklch(0.48 0.012 65);
+  --accent: oklch(0.95 0.018 195);
+  --accent-foreground: oklch(0.33 0.06 195);
+  --destructive: oklch(0.52 0.18 27);
+  --border: oklch(0.9 0.006 75);
+  --input: oklch(0.62 0.012 70);
+  --ring: oklch(0.55 0.09 195);
+  --chart-1: oklch(0.52 0.09 195);
+  --chart-2: oklch(0.6 0.012 70);
+  --chart-3: oklch(0.58 0.11 60);
+  --chart-4: oklch(0.5 0.06 250);
+  --chart-5: oklch(0.4 0.03 65);
+  --chart-measured: oklch(0.52 0.09 195);
+  --chart-gap: oklch(0.6 0.012 70);
+  --chart-invalid: oklch(0.58 0.11 60);
+  --warning: oklch(0.6 0.12 70);
+  --warning-foreground: oklch(0.4 0.08 65);
+
+  /* Chart hatch geometry (see README.md, "Hatch patterns") */
+  --chart-hatch-pitch: 6px;
+  --chart-hatch-stroke: 1.25px;
+  --chart-invalid-pitch: 8px;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --background: oklch(0.165 0.005 65);
+    --foreground: oklch(0.94 0.005 80);
+    --card: oklch(0.2 0.006 65);
+    --card-foreground: oklch(0.94 0.005 80);
+    --popover: oklch(0.22 0.006 65);
+    --popover-foreground: oklch(0.94 0.005 80);
+    --primary: oklch(0.74 0.1 190);
+    --primary-foreground: oklch(0.19 0.02 200);
+    --secondary: oklch(0.26 0.007 65);
+    --secondary-foreground: oklch(0.92 0.005 80);
+    --muted: oklch(0.25 0.007 65);
+    --muted-foreground: oklch(0.71 0.012 75);
+    --accent: oklch(0.28 0.03 195);
+    --accent-foreground: oklch(0.88 0.05 190);
+    --destructive: oklch(0.7 0.16 25);
+    --border: oklch(0.31 0.007 65);
+    --input: oklch(0.53 0.01 70);
+    --ring: oklch(0.72 0.1 190);
+    --chart-1: oklch(0.74 0.1 190);
+    --chart-2: oklch(0.56 0.012 70);
+    --chart-3: oklch(0.75 0.12 65);
+    --chart-4: oklch(0.7 0.07 250);
+    --chart-5: oklch(0.82 0.02 75);
+    --chart-measured: oklch(0.74 0.1 190);
+    --chart-gap: oklch(0.56 0.012 70);
+    --chart-invalid: oklch(0.75 0.12 65);
+    --warning: oklch(0.78 0.13 75);
+    --warning-foreground: oklch(0.86 0.09 80);
+  }
+}

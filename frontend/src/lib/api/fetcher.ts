@@ -28,6 +28,8 @@ export type ServerInit = {
   baseUrl: string;
   cookie: string;
   cache: "no-store";
+  /** Overrides `SERVER_TIMEOUT_MS`; only the consumption prefetch sets it. */
+  timeoutMs?: number;
 };
 
 /**
@@ -70,7 +72,7 @@ function buildInit(url: string, options: RequestOptions): { target: string; init
   if (server.cookie) {
     headers.set("Cookie", server.cookie);
   }
-  const timeout = AbortSignal.timeout(SERVER_TIMEOUT_MS);
+  const timeout = AbortSignal.timeout(server.timeoutMs ?? SERVER_TIMEOUT_MS);
   return {
     target: `${server.baseUrl}${url}`,
     init: {

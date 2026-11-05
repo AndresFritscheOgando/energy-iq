@@ -13,12 +13,12 @@
  */
 import "server-only";
 
-import { QueryClient } from "@tanstack/react-query";
+import { QueryClient, type QueryKey } from "@tanstack/react-query";
 import { cookies } from "next/headers";
-import { redirect } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import { cache } from "react";
 
-import { ApiUnavailableError, isNotAuthenticated } from "./errors";
+import { ApiError, ApiUnavailableError, isNotAuthenticated } from "./errors";
 import type { ServerInit } from "./fetcher";
 import { getMeQueryOptions } from "./generated/auth/auth";
 import type { UserOut } from "./generated/model";
@@ -117,4 +117,45 @@ export async function redirectIfSignedIn(): Promise<void> {
   if (session.status === "signed_in") {
     redirect("/");
   }
+}
+
+export type LoadResult<T> =
+  { status: "ok"; data: T } | { status: "unavailable"; requestId: string | null };
+
+/**
+ * A read a page cannot render without (spec 0011). A 404, or a 422 on a path
+ * id, is the not found page, so a foreign, archived, unknown, or malformed id
+ * all look the same. A lost session goes to login. An outage returns
+ * `unavailable`, like `SessionState`. `redirect()` and `notFound()` throw, so
+ * they run after the `try`, never inside it.
+ */
+export async function loadOrNotFound<T>(
+  options: { queryKey: QueryKey },
+  path: string,
+  searchParams: SearchParams = {},
+): Promise<LoadResult<T>> {
+  let outcome: LoadResult<T> | "not_found" | "signed_out";
+  try {
+    const data = await getServerQueryClient().fetchQuery(
+      options as Parameters<QueryClient["fetchQuery"]>[0],
+    );
+    outcome = { status: "ok", data: data as T };
+  } catch (error) {
+    if (isNotAuthenticated(error)) {
+      outcome = "signed_out";
+    } else if (error instanceof ApiError && (error.status === 404 || error.status === 422)) {
+      outcome = "not_found";
+    } else if (error instanceof ApiUnavailableError) {
+      outcome = { status: "unavailable", requestId: error.requestId };
+    } else {
+      throw error;
+    }
+  }
+  if (outcome === "signed_out") {
+    redirect(loginRedirectTarget(path, searchParams));
+  }
+  if (outcome === "not_found") {
+    notFound();
+  }
+  return outcome;
 }
