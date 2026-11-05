@@ -32,7 +32,7 @@ services:
   # Spec 0012/0002: the extraction worker. Start it with
   #   docker compose -f infra/compose.yaml --profile worker up -d worker
   # It joins only the internal network (PostgreSQL and nothing else), so it has
-  # no route to the internet. It is the only service that mounts the documents.
+  # no route to the internet. It is the only container that mounts the documents.
   worker:
     profiles: ["worker"]
     build:
@@ -50,7 +50,9 @@ services:
       ENERGYIQ_WORKER_ISOLATION: container
       ENERGYIQ_DOCUMENT_ROOT: /var/lib/energyiq/documents
       ENERGYIQ_DATABASE_URL: postgresql+psycopg://energyiq_app:${ENERGYIQ_APP_PASSWORD}@db:5432/energyiq_dev
-    user: "10001:10001"
+    # On Linux set ENERGYIQ_WORKER_UID to your own uid so the worker can read
+    # files the API wrote. Docker Desktop (Windows, macOS) needs no change.
+    user: "${ENERGYIQ_WORKER_UID:-10001}:${ENERGYIQ_WORKER_GID:-10001}"
     read_only: true
     tmpfs:
       - /tmp:size=64m,mode=1777
@@ -60,8 +62,16 @@ services:
     mem_limit: 1g
     pids_limit: 64
     networks: [internal]
+    # The API runs on the host and writes uploads to <repo>/.local/documents
+    # (the dev default of ENERGYIQ_DOCUMENT_ROOT). The worker reads that same
+    # directory, read only, because it never writes documents.
     volumes:
-      - energyiq-documents:/var/lib/energyiq/documents
+      - type: bind
+        source: ../.local/documents
+        target: /var/lib/energyiq/documents
+        read_only: true
+        bind:
+          create_host_path: true
 
 networks:
   # No gateway: containers on it cannot reach the internet. ``db`` also stays on
@@ -70,5 +80,4 @@ networks:
     internal: true
 
 volumes:
-  energyiq-documents:
   energyiq-pgdata:

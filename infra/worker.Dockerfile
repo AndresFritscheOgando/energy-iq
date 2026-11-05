@@ -15,8 +15,9 @@ RUN uv sync --frozen --no-dev --no-install-project
 COPY backend/src backend/src
 COPY backend/alembic backend/alembic
 
-# The named volume inherits this owner on first use, so the non root user can write.
-RUN mkdir -p /var/lib/energyiq/documents     && chown -R 10001:10001 /var/lib/energyiq
+# Mount point only. Compose bind mounts the host document directory here, read only.
+RUN mkdir -p /var/lib/energyiq/documents \
+    && chown -R 10001:10001 /var/lib/energyiq
 
 USER 10001:10001
 CMD ["python", "-m", "energyiq.worker"]
