@@ -25,7 +25,11 @@ UNSAFE_ROUTES = [route for route in ROUTES if route.method in UNSAFE]
 
 def _path(route: ApiRoute) -> str:
     return route.path.format(
-        property_id=uuid4(), meter_id=uuid4(), reading_id=uuid4(), event_id=uuid4()
+        property_id=uuid4(),
+        meter_id=uuid4(),
+        reading_id=uuid4(),
+        event_id=uuid4(),
+        invoice_id=uuid4(),
     )
 
 

@@ -25,6 +25,9 @@ TABLES = {
     "readings",
     "audit_events",
     "idempotency_keys",
+    "invoices",
+    "invoice_revisions",
+    "invoice_current_periods",
 }
 
 CONSTRAINTS = {
@@ -69,6 +72,24 @@ CONSTRAINTS = {
     "ck_idempotency_keys_key_length",
     "ck_idempotency_keys_request_hash_length",
     "ck_idempotency_keys_response_pair",
+    "pk_invoices",
+    "fk_invoices_meter_id_meters",
+    "fk_invoices_owner_id_users",
+    "fk_invoices_current_revision",
+    "pk_invoice_revisions",
+    "fk_invoice_revisions_invoice",
+    "fk_invoice_revisions_actor",
+    "fk_invoice_revisions_previous",
+    "uq_invoice_revisions_number",
+    "ck_invoice_revisions_status",
+    "ck_invoice_revisions_period_order",
+    "ck_invoice_revisions_billed_kwh_nonnegative",
+    "ck_invoice_revisions_total_nonnegative",
+    "ck_invoice_revisions_energy_nonnegative",
+    "pk_invoice_current_periods",
+    "fk_invoice_periods_invoice",
+    "fk_invoice_periods_meter",
+    "fk_invoice_periods_revision",
 }
 
 INDEXES = {
@@ -99,6 +120,19 @@ INDEXES = {
     "ix_audit_events_entity",
     "pk_idempotency_keys",
     "ix_idempotency_keys_expires_at",
+    "pk_invoices",
+    "ix_invoices_meter_id",
+    "ix_invoices_owner_id",
+    "ix_invoices_current_revision_id",
+    "pk_invoice_revisions",
+    "ix_invoice_revisions_invoice_id",
+    "ix_invoice_revisions_actor_id",
+    "ix_invoice_revisions_previous_revision_id",
+    "uq_invoice_revisions_number",
+    "pk_invoice_current_periods",
+    "ix_invoice_current_periods_meter_id",
+    "ix_invoice_current_periods_current_revision_id",
+    "ex_invoice_current_periods_meter_overlap",
 }
 
 PARTIAL_UNIQUE_INDEXES = {
@@ -112,6 +146,11 @@ PARTIAL_UNIQUE_INDEXES = {
 }
 
 COLUMN_UPDATES = {
+    ("invoices", "current_revision_id"),
+    ("invoice_revisions", "status"),
+    ("invoice_revisions", "confirmed_at"),
+    ("invoice_current_periods", "current_revision_id"),
+    ("invoice_current_periods", "local_daterange"),
     ("users", "password_hash"),
     ("users", "disabled_at"),
     ("sessions", "last_seen_at"),
@@ -245,7 +284,7 @@ def test_every_foreign_key_restricts_deletes_and_is_indexed(
             {"tables": list(TABLES)},
         ).all()
 
-    assert len(rows) == 10
+    assert len(rows) == 19
     for name, delete_rule, column, table, indexed in rows:
         assert delete_rule == "r", f"{name} is not ON DELETE RESTRICT"
         assert indexed, f"{table}.{column} ({name}) has no leading index"

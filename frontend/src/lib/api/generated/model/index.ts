@@ -5,13 +5,18 @@
  * OpenAPI spec version: 0.1.0
  */
 
+export * from './confirmRequest';
 export * from './conflictEntryOut';
 export * from './conflictOut';
 export * from './consumptionProblem';
 export * from './consumptionSummaryRequest';
 export * from './consumptionSummaryResponse';
+export * from './correctionCreate';
+export * from './correctionCreateFieldOrigins';
 export * from './credentialsIn';
 export * from './distributor';
+export * from './draftCreate';
+export * from './draftCreateFieldOrigins';
 export * from './duplicateIdOut';
 export * from './duplicateIdOutCollection';
 export * from './eventCreate';
@@ -23,7 +28,9 @@ export * from './healthResponse';
 export * from './intervalOut';
 export * from './intervalReason';
 export * from './intervalStatus';
+export * from './invoiceOut';
 export * from './listEventsParams';
+export * from './listInvoicesParams';
 export * from './listMetersParams';
 export * from './listPropertiesParams';
 export * from './listReadingsOrder';
@@ -34,6 +41,7 @@ export * from './meterEventType';
 export * from './meterOut';
 export * from './meterPatch';
 export * from './pageEventOut';
+export * from './pageInvoiceOut';
 export * from './pageMeterOut';
 export * from './pagePropertyOut';
 export * from './pageReadingOut';
@@ -48,6 +56,10 @@ export * from './readingPatch';
 export * from './readingSource';
 export * from './readingStatus';
 export * from './readyResponse';
+export * from './revisionOut';
+export * from './revisionOutFieldOrigins';
+export * from './revisionOutOldValues';
+export * from './revisionOutStatus';
 export * from './storedConsumptionParams';
 export * from './userOut';
 export * from './validationErrorItem';

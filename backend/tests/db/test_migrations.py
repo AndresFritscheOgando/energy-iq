@@ -171,7 +171,7 @@ def _readings(dsn: str) -> list[tuple[object, ...]]:
 @pytest.mark.db
 def test_downgrade_0003_to_0002_keeps_the_readings(scratch: Scratch) -> None:
     migrate(scratch.migrator_dsn, "head")
-    assert script_head() == "0003"
+    assert script_head() == "0004"
     before = _seed_readings(scratch)
     assert len(before) == 2
 

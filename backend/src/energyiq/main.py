@@ -25,6 +25,7 @@ from starlette.middleware.cors import CORSMiddleware
 from energyiq import __version__
 from energyiq.identity.passwords import PasswordService
 from energyiq.identity.router import router as identity_router
+from energyiq.invoices.router import router as invoices_router
 from energyiq.platform.db import (
     build_engine,
     install_database_handlers,
@@ -139,6 +140,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(properties_router)
     app.include_router(readings_router)
     app.include_router(stored_router)
+    app.include_router(invoices_router)
     _install_openapi(app)
 
     # add_middleware puts each new layer outside the previous ones.

@@ -54,10 +54,9 @@ These are local function contracts, not HTTP endpoints. P2-01 maps them to HTTP
 | `POST/GET /meters/{id}/readings`, `PATCH /meters/{id}/readings/{reading_id}` | Store, list, flag, or void cumulative readings | 2 (P2-04, built) |
 | `POST/GET /meters/{id}/events`, `POST /meters/{id}/events/{event_id}/approve`, `POST /meters/{id}/events/{event_id}/reject` | Record and decide meter events | 2 (P2-04, built) |
 | `GET /meters/{id}/consumption?from=&to=` | Measured interval usage and coverage from stored data | 2 (P2-04, built) |
-| `POST/GET /meters/{id}/bills` | Manual and confirmed bills | 3 |
-| `POST /documents`, `GET /documents/{id}/status` | Upload + progress | 4 |
-| `POST /documents/{id}/confirm` | Human-reviewed bill extraction | 4 |
-| `GET /meters/{id}/reconciliation` | Bill/readings comparison | 4 |
+| `POST/GET /meters/{id}/invoices`, `GET /invoices/{id}`, `POST /invoices/{id}/revisions`, `POST /invoices/{id}/confirm` | Owner scoped manual drafts, explicit confirmation, immutable corrected revisions, and overlap rejection; P4-01 built from [spec 0012](specs/0012-phase-four-bill-intelligence/index.md) | 4 |
+| `POST /meters/{id}/documents`, `GET /documents/{id}`, `GET /documents/{id}/source`, `POST /documents/{id}/retry`, `DELETE /documents/{id}`, `GET /documents/{id}/extractions` | Private PDF upload, source, job status, retry, deletion, and proposals; proposed in spec 0012, not built | 4 |
+| `GET /meters/{id}/reconciliation` | Billed and measured kWh comparison, and a cited estimate when supported; proposed in spec 0012, not built | 4 |
 | `GET /meters/{id}/forecast`, `GET /meters/{id}/anomalies` | Analytics | 5 |
 | `POST /ai/questions` | Evidence-grounded question | 6 |
 | `POST /agent/runs` | Authorized bounded workflow | 7 |
@@ -89,6 +88,8 @@ Set by [spec 0008](specs/0008-minimal-fastapi-application/index.md); every later
 | 415 | `unsupported_media_type` | JSON route without `application/json` (only `charset=utf-8` allowed) | |
 | 422 | `validation_error` | schema or field rule failed | `errors[]` of `{loc, code, message}`, first 100, plus `errors_truncated` |
 | 422 | `duplicate_id` | repeated id within readings or within events | `duplicates[]` of `{collection, id, input_indexes}` |
+| 422 | `empty_correction` | an invoice revision submitted no value that differs from its base (P4-01) | |
+| 409 | `stale_invoice_revision` | an invoice write names a base or current revision that is no longer the latest (P4-01) | |
 | 422 | `reading_timestamp_conflict` | readings share a UTC instant (all statuses) | `conflicts[]` of `{recorded_at, entries[{input_index, reading_id, status}]}` |
 | other | `http_<status>` | any other `HTTPException` | |
 | 500 | `internal_error` | anything unexpected; generic detail, traceback logged once with the request id | |

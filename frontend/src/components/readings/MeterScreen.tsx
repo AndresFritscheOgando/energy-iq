@@ -7,6 +7,7 @@
 import { useState } from "react";
 
 import { UsageSection } from "@/components/consumption/UsageSection";
+import { InvoicePanel } from "@/components/invoices/InvoicePanel";
 import { useGetMeter } from "@/lib/api/generated/meters/meters";
 import type { ConsumptionWindow, Range } from "@/lib/zoned-time";
 import { en } from "@/messages/en";
@@ -56,6 +57,16 @@ export function MeterScreen({ meterId, zone, today, range, window }: Props) {
         canAddReadings={active}
       />
       <ReadingsList meterId={meterId} zone={zone} />
+      {meter && (
+        <div className="min-[900px]:col-span-2">
+          <InvoicePanel
+            meterId={meterId}
+            distributor={meter.distributor}
+            zone={zone}
+            active={active}
+          />
+        </div>
+      )}
     </div>
   );
 }

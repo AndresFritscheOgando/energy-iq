@@ -101,7 +101,7 @@ export async function deactivate(page: Page, meterId: string): Promise<void> {
 export async function submitReading(page: Page, value: string, days?: number): Promise<void> {
   await page.getByLabel("Meter value").fill(value);
   if (days !== undefined) {
-    await page.getByLabel("Date").fill(daysAgo(days));
+    await page.getByLabel("Date", { exact: true }).fill(daysAgo(days));
   }
   await page.getByRole("button", { name: "Save reading" }).click();
 }
