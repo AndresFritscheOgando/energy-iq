@@ -67,6 +67,7 @@ SECRET_ENV_VARS = (
     "ENERGYIQ_SECRET_KEY",
     "ENERGYIQ_SESSION_COOKIE_SECURE",
     "ENERGYIQ_TRUSTED_ORIGINS",
+    "ENERGYIQ_FORWARDED_ALLOW_IPS",
 )
 PROD_SECRETS = {
     "ENERGYIQ_DATABASE_URL": "postgresql+psycopg://app:synthetic@db.invalid/prod",
@@ -75,6 +76,7 @@ PROD_SECRETS = {
     ),
     "ENERGYIQ_SECRET_KEY": "synthetic-prod-secret-key-for-tests-only",
     "ENERGYIQ_TRUSTED_ORIGINS": '["https://app.example"]',
+    "ENERGYIQ_FORWARDED_ALLOW_IPS": '["10.0.0.5"]',
 }
 
 

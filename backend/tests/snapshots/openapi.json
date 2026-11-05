@@ -1427,7 +1427,7 @@
     "/api/v1/auth/login": {
       "post": {
         "description": "Sign in; unknown email, wrong password, and disabled user look alike.",
-        "operationId": "login_api_v1_auth_login_post",
+        "operationId": "login",
         "requestBody": {
           "content": {
             "application/json": {
@@ -1539,7 +1539,7 @@
     "/api/v1/auth/logout": {
       "post": {
         "description": "Revoke the current session if there is one; 204 either way.",
-        "operationId": "logout_api_v1_auth_logout_post",
+        "operationId": "logout",
         "responses": {
           "204": {
             "description": "Successful Response"
@@ -1574,7 +1574,7 @@
     "/api/v1/auth/me": {
       "get": {
         "description": "The signed in account.",
-        "operationId": "me_api_v1_auth_me_get",
+        "operationId": "me",
         "responses": {
           "200": {
             "content": {
@@ -1616,7 +1616,7 @@
     "/api/v1/auth/register": {
       "post": {
         "description": "Create an account and sign it in.",
-        "operationId": "register_api_v1_auth_register_post",
+        "operationId": "register",
         "requestBody": {
           "content": {
             "application/json": {
@@ -1728,7 +1728,7 @@
     "/api/v1/consumption/summary": {
       "post": {
         "description": "Summarize posted readings and events over a window. Stores nothing.\n\nStages run in a fixed order and the first failure answers: schema,\nduplicate ids, mapping, timestamp conflicts, then computation (AC-5a).",
-        "operationId": "consumption_summary_api_v1_consumption_summary_post",
+        "operationId": "consumption_summary",
         "requestBody": {
           "content": {
             "application/json": {
@@ -1839,7 +1839,7 @@
     },
     "/api/v1/meters/{meter_id}": {
       "get": {
-        "operationId": "get_meter_api_v1_meters__meter_id__get",
+        "operationId": "get_meter",
         "parameters": [
           {
             "in": "path",
@@ -1911,7 +1911,7 @@
       },
       "patch": {
         "description": "Change the label and/or register digits of an active meter.",
-        "operationId": "update_meter_api_v1_meters__meter_id__patch",
+        "operationId": "update_meter",
         "parameters": [
           {
             "in": "path",
@@ -2044,7 +2044,7 @@
     },
     "/api/v1/meters/{meter_id}/consumption": {
       "get": {
-        "operationId": "stored_consumption_api_v1_meters__meter_id__consumption_get",
+        "operationId": "stored_consumption",
         "parameters": [
           {
             "in": "path",
@@ -2135,7 +2135,7 @@
     "/api/v1/meters/{meter_id}/deactivate": {
       "post": {
         "description": "Terminal: a replacement physical meter gets a new meter (ADR-006).",
-        "operationId": "deactivate_meter_api_v1_meters__meter_id__deactivate_post",
+        "operationId": "deactivate_meter",
         "parameters": [
           {
             "in": "path",
@@ -2244,7 +2244,7 @@
     },
     "/api/v1/meters/{meter_id}/events": {
       "get": {
-        "operationId": "list_events_api_v1_meters__meter_id__events_get",
+        "operationId": "list_events",
         "parameters": [
           {
             "in": "path",
@@ -2356,7 +2356,7 @@
         "summary": "List Events"
       },
       "post": {
-        "operationId": "create_event_api_v1_meters__meter_id__events_post",
+        "operationId": "create_event",
         "parameters": [
           {
             "in": "path",
@@ -2502,7 +2502,7 @@
     },
     "/api/v1/meters/{meter_id}/events/{event_id}/approve": {
       "post": {
-        "operationId": "approve_event_api_v1_meters__meter_id__events__event_id__approve_post",
+        "operationId": "approve_event",
         "parameters": [
           {
             "in": "path",
@@ -2628,7 +2628,7 @@
     },
     "/api/v1/meters/{meter_id}/events/{event_id}/reject": {
       "post": {
-        "operationId": "reject_event_api_v1_meters__meter_id__events__event_id__reject_post",
+        "operationId": "reject_event",
         "parameters": [
           {
             "in": "path",
@@ -2754,7 +2754,7 @@
     },
     "/api/v1/meters/{meter_id}/readings": {
       "get": {
-        "operationId": "list_readings_api_v1_meters__meter_id__readings_get",
+        "operationId": "list_readings",
         "parameters": [
           {
             "in": "path",
@@ -2900,7 +2900,7 @@
         "summary": "List Readings"
       },
       "post": {
-        "operationId": "create_reading_api_v1_meters__meter_id__readings_post",
+        "operationId": "create_reading",
         "parameters": [
           {
             "in": "path",
@@ -3046,7 +3046,7 @@
     },
     "/api/v1/meters/{meter_id}/readings/{reading_id}": {
       "patch": {
-        "operationId": "change_reading_status_api_v1_meters__meter_id__readings__reading_id__patch",
+        "operationId": "change_reading_status",
         "parameters": [
           {
             "in": "path",
@@ -3186,7 +3186,7 @@
     },
     "/api/v1/properties": {
       "get": {
-        "operationId": "list_properties_api_v1_properties_get",
+        "operationId": "list_properties",
         "parameters": [
           {
             "in": "query",
@@ -3265,7 +3265,7 @@
         ]
       },
       "post": {
-        "operationId": "create_property_api_v1_properties_post",
+        "operationId": "create_property",
         "parameters": [
           {
             "in": "header",
@@ -3395,7 +3395,7 @@
     "/api/v1/properties/{property_id}": {
       "delete": {
         "description": "Soft delete: the property, its meters, and their data become 404.",
-        "operationId": "archive_property_api_v1_properties__property_id__delete",
+        "operationId": "archive_property",
         "parameters": [
           {
             "in": "path",
@@ -3469,7 +3469,7 @@
         ]
       },
       "get": {
-        "operationId": "get_property_api_v1_properties__property_id__get",
+        "operationId": "get_property",
         "parameters": [
           {
             "in": "path",
@@ -3541,7 +3541,7 @@
       },
       "patch": {
         "description": "Change any of nickname, region (null clears it), and timezone.\n\nChanging the timezone never alters stored readings.",
-        "operationId": "update_property_api_v1_properties__property_id__patch",
+        "operationId": "update_property",
         "parameters": [
           {
             "in": "path",
@@ -3674,7 +3674,7 @@
     },
     "/api/v1/properties/{property_id}/meters": {
       "get": {
-        "operationId": "list_meters_api_v1_properties__property_id__meters_get",
+        "operationId": "list_meters",
         "parameters": [
           {
             "in": "path",
@@ -3783,7 +3783,7 @@
         ]
       },
       "post": {
-        "operationId": "create_meter_api_v1_properties__property_id__meters_post",
+        "operationId": "create_meter",
         "parameters": [
           {
             "in": "path",
@@ -3933,7 +3933,7 @@
     "/health": {
       "get": {
         "description": "Report that the process is serving requests, and its version.",
-        "operationId": "health_health_get",
+        "operationId": "health",
         "responses": {
           "200": {
             "content": {
@@ -3955,7 +3955,7 @@
     "/health/ready": {
       "get": {
         "description": "Report ready when the database answers and its schema is at head.",
-        "operationId": "ready_health_ready_get",
+        "operationId": "ready",
         "responses": {
           "200": {
             "content": {

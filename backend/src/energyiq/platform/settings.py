@@ -1,5 +1,6 @@
 """Application settings read from ``ENERGYIQ_*`` environment variables."""
 
+import ipaddress
 from collections.abc import Mapping
 from typing import Annotated, Any, Literal
 
@@ -16,6 +17,9 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 DEV_CORS_ORIGINS = ["http://localhost:3000"]
 DEV_TRUSTED_ORIGINS = ["http://localhost:3000"]
+# Peers whose ``X-Forwarded-For`` is believed (spec 0010 AC-14): the local
+# Next.js server. ``prod`` has no default and must list its proxies.
+DEV_FORWARDED_ALLOW_IPS = ["127.0.0.1", "::1"]
 
 # Synthetic local values matching ``infra/.env.example`` (spec 0009/0001 AC-1).
 # ``prod`` never falls back to these: each must be set explicitly there.
@@ -62,8 +66,8 @@ class Settings(BaseSettings):
 
     ``env`` is required everywhere (no default), so an unset
     ``ENERGYIQ_ENV`` fails with a ``missing`` error naming ``env``.
-    In ``prod`` the database URLs, the secret key, and the trusted origins
-    have no default, so a missing one fails with a ``missing`` error naming
+    In ``prod`` the database URLs, the secret key, the trusted origins, and
+    the forwarded allow list have no default, so a missing one fails with a ``missing`` error naming
     the field. Secrets are ``SecretStr`` and render as ``**********`` in
     ``repr`` and logs.
     """
@@ -89,8 +93,18 @@ class Settings(BaseSettings):
     session_cookie_secure: bool = False
     trusted_origins: list[str] = Field(default_factory=list[str], validate_default=True)
 
+    # Spec 0010 AC-14: IP addresses or CIDR ranges (never hostnames) of the
+    # proxies allowed to set the client address. ``[]`` is valid in ``prod``
+    # but must be written out; unset fails there.
+    forwarded_allow_ips: list[str] = Field(default=_UNSET_ENV, validate_default=True)
+
     @field_validator(
-        "env", "database_url", "migration_database_url", "secret_key", mode="before"
+        "env",
+        "database_url",
+        "migration_database_url",
+        "secret_key",
+        "forwarded_allow_ips",
+        mode="before",
     )
     @classmethod
     def _required(cls, value: object) -> object:
@@ -109,6 +123,23 @@ class Settings(BaseSettings):
             raise PydanticCustomError("missing", "Field required")
         return [origin.lower() for origin in value]
 
+    @field_validator("forwarded_allow_ips")
+    @classmethod
+    def _ip_or_network(cls, value: list[str]) -> list[str]:
+        """Each entry must parse as an IP address or a CIDR network."""
+        for entry in value:
+            try:
+                if "/" in entry:
+                    ipaddress.ip_network(entry)
+                else:
+                    ipaddress.ip_address(entry)
+            except ValueError:
+                raise PydanticCustomError(
+                    "ip_or_network",
+                    "Each entry must be an IP address or a CIDR network",
+                ) from None
+        return value
+
     @model_validator(mode="before")
     @classmethod
     def _environment_defaults(cls, data: dict[str, Any]) -> dict[str, Any]:
@@ -120,6 +151,7 @@ class Settings(BaseSettings):
         }
         if env != "prod":
             defaults["trusted_origins"] = list(DEV_TRUSTED_ORIGINS)
+            defaults["forwarded_allow_ips"] = list(DEV_FORWARDED_ALLOW_IPS)
             defaults["database_url"] = local_database_url(env)
             defaults["migration_database_url"] = local_database_url(env, migrator=True)
             defaults["secret_key"] = LOCAL_SECRET_KEY

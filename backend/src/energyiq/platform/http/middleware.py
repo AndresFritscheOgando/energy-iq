@@ -4,15 +4,18 @@ Pure ASGI instead of ``BaseHTTPMiddleware`` so streamed bodies are counted as
 they arrive and the 500 path can be owned outside every handler.
 """
 
+import ipaddress
 import logging
 import re
 import time
+from collections.abc import Sequence
 from uuid import uuid4
 
 from fastapi.routing import APIRoute
 from starlette.datastructures import Headers, MutableHeaders
 from starlette.exceptions import HTTPException
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
+from uvicorn.middleware.proxy_headers import ProxyHeadersMiddleware
 
 from energyiq.platform.http.problems import problem_response, request_id_from
 from energyiq.platform.logging import ACCESS_LOGGER, ERROR_LOGGER
@@ -170,3 +173,78 @@ class BodySizeLimitMiddleware:
             return message
 
         await self.app(scope, limited_receive, send)
+
+
+class NoStoreMiddleware:
+    """``Cache-Control: no-store`` on every response under ``prefixes``.
+
+    A pure ASGI layer outside the request context, so problem responses,
+    the 500 path, and routes that return their own ``Response`` all carry it
+    (spec 0010 AC-13: a browser or shared cache must never keep an auth
+    response).
+    """
+
+    def __init__(self, app: ASGIApp, prefixes: Sequence[str]) -> None:
+        self.app = app
+        self.prefixes = tuple(prefixes)
+
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        if scope["type"] != "http" or not scope["path"].startswith(self.prefixes):
+            await self.app(scope, receive, send)
+            return
+
+        async def no_store_send(message: Message) -> None:
+            if message["type"] == "http.response.start":
+                MutableHeaders(scope=message)["Cache-Control"] = "no-store"
+            await send(message)
+
+        await self.app(scope, receive, no_store_send)
+
+
+def _unmapped(host: str) -> str:
+    """``::ffff:127.0.0.1`` becomes ``127.0.0.1``; anything else is unchanged."""
+    try:
+        address = ipaddress.ip_address(host)
+    except ValueError:
+        return host
+    if isinstance(address, ipaddress.IPv6Address) and address.ipv4_mapped:
+        return str(address.ipv4_mapped)
+    return host
+
+
+def _normalize_client(scope: Scope) -> None:
+    client = scope.get("client")
+    if client:
+        scope["client"] = (_unmapped(client[0]), client[1])
+
+
+class ForwardedClientMiddleware:
+    """The browser's address behind trusted proxies (spec 0010 AC-14).
+
+    Wraps Uvicorn's ``ProxyHeadersMiddleware``: when the direct peer is in
+    ``trusted`` (IP addresses or CIDR networks), ``scope["client"]`` becomes
+    the rightmost ``X-Forwarded-For`` entry that is not itself trusted, and a
+    single valid ``X-Forwarded-Proto`` (``http`` or ``https``) sets the
+    scheme. Anything else in that header is ignored. IPv4 mapped IPv6 peers
+    are unmapped first, so ``::ffff:127.0.0.1`` matches ``127.0.0.1``. An
+    untrusted peer's headers change nothing. Uvicorn's own proxy header
+    handling must be off (``--no-proxy-headers``) so this is the only source.
+    """
+
+    def __init__(self, app: ASGIApp, trusted: Sequence[str]) -> None:
+        self.app = app
+        self.proxy = ProxyHeadersMiddleware(
+            self._after,  # pyright: ignore[reportArgumentType]
+            trusted_hosts=list(trusted),
+        )
+
+    async def _after(self, scope: Scope, receive: Receive, send: Send) -> None:
+        _normalize_client(scope)
+        await self.app(scope, receive, send)
+
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        if scope["type"] != "http":
+            await self.app(scope, receive, send)
+            return
+        _normalize_client(scope)
+        await self.proxy(scope, receive, send)  # pyright: ignore[reportArgumentType]

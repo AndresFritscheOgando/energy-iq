@@ -102,6 +102,53 @@ def test_invalid_values_fail_naming_the_field(
     assert excinfo.value.errors()[0]["loc"] == (field,)
 
 
+@pytest.mark.parametrize("env", ["dev", "test"])
+def test_forwarded_allow_ips_default_to_loopback(env: str) -> None:
+    settings = Settings(env=env)  # pyright: ignore[reportArgumentType]
+
+    assert settings.forwarded_allow_ips == ["127.0.0.1", "::1"]
+
+
+@pytest.mark.usefixtures("prod_secrets")
+def test_prod_requires_forwarded_allow_ips(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("ENERGYIQ_ENV", "prod")
+    monkeypatch.delenv("ENERGYIQ_FORWARDED_ALLOW_IPS")
+
+    with pytest.raises(ValidationError) as excinfo:
+        Settings()
+
+    assert [(e["loc"], e["type"]) for e in excinfo.value.errors()] == [
+        (("forwarded_allow_ips",), "missing")
+    ]
+
+
+@pytest.mark.usefixtures("prod_secrets")
+def test_prod_accepts_an_explicit_empty_allow_list(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("ENERGYIQ_ENV", "prod")
+    monkeypatch.setenv("ENERGYIQ_FORWARDED_ALLOW_IPS", "[]")
+
+    assert Settings().forwarded_allow_ips == []
+
+
+def test_forwarded_allow_ips_read_from_environment(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("ENERGYIQ_ENV", "dev")
+    monkeypatch.setenv("ENERGYIQ_FORWARDED_ALLOW_IPS", '["10.0.0.5", "10.1.0.0/16"]')
+
+    assert Settings().forwarded_allow_ips == ["10.0.0.5", "10.1.0.0/16"]
+
+
+@pytest.mark.parametrize("entry", ["nextjs.internal", "*", "10.0.0.300", "10.0.0.1/40"])
+def test_forwarded_allow_ips_reject_non_addresses(entry: str) -> None:
+    with pytest.raises(ValidationError) as excinfo:
+        Settings(env="dev", forwarded_allow_ips=[entry])
+
+    assert excinfo.value.errors()[0]["loc"] == ("forwarded_allow_ips",)
+
+
 def test_settings_are_frozen() -> None:
     settings = Settings(env="dev")
 

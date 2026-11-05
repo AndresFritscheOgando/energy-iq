@@ -66,6 +66,25 @@ def test_decimal_and_time_outputs_are_strings(app: FastAPI) -> None:
     assert {"type": "string"} in interval["kwh_per_day"]["anyOf"]
 
 
+def test_operation_ids_are_route_names_and_unique(app: FastAPI) -> None:
+    """Spec 0010 AC-3: generated clients get readable, unique names."""
+    operations = {
+        (method, path): operation["operationId"]
+        for path, item in app.openapi()["paths"].items()
+        for method, operation in item.items()
+    }
+    ids = list(operations.values())
+
+    assert len(ids) == 25
+    assert len(set(ids)) == len(ids)
+    assert operations[("post", "/api/v1/auth/login")] == "login"
+    assert operations[("get", "/api/v1/properties")] == "list_properties"
+    assert operations[("get", "/health/ready")] == "ready"
+    for operation_id in ids:
+        assert operation_id.isidentifier()
+        assert "api_v1" not in operation_id
+
+
 def test_readings_domain_imports_no_framework() -> None:
     code = (
         "import sys, energyiq.readings; "

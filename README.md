@@ -28,7 +28,7 @@
 |---|---|
 | Domain and backend | Python 3.13, FastAPI, modular monolith |
 | Data | PostgreSQL 18 (Docker Compose), SQLAlchemy 2 (sync) over psycopg 3, Alembic |
-| Frontend | Next.js (planned) |
+| Frontend | Next.js 16 (App Router), React 19, TanStack Query, Tailwind CSS 4, Vitest, pnpm |
 | AI | Local Ollama behind a provider abstraction (planned) |
 | Tooling | `uv`, pytest, Hypothesis (property tests), httpx2 (API tests), Ruff, Pyright (strict) |
 
@@ -70,14 +70,36 @@ uv sync
 These variables last only for the current terminal session. `.venv`, `.cache`, and `.local-python` are git-ignored.
 </details>
 
+### Run the web app
+
+The browser app lives in `frontend/` (Next.js, pnpm, Node.js 24 or newer). The browser only ever talks to Next.js; Next.js forwards `/api/*` to FastAPI (the same origin proxy from [ADR-007](docs/adr/ADR-007-session-auth-same-origin-proxy.md)), so the session cookie stays HttpOnly and no token reaches JavaScript. See [spec 0010](docs/specs/0010-nextjs-foundation-session/index.md) and [ADR-008](docs/adr/ADR-008-frontend-data-access.md).
+
+1. Start PostgreSQL and migrate (see "Database" below).
+2. Start the API with the command in "Run the API server", including `--no-proxy-headers`.
+3. In a second terminal:
+
+```powershell
+cd frontend
+pnpm install
+pnpm dev
+```
+
+Open exactly `http://localhost:3000`. That is the dev trusted origin; `http://127.0.0.1:3000` is a different origin, so the CSRF `Origin` check refuses its sign in and sign out with a 403. If port 3000 is taken, run `pnpm dev -p 3100` and start the API with `$env:ENERGYIQ_TRUSTED_ORIGINS = '["http://localhost:3100"]'`.
+
+`ENERGYIQ_API_ORIGIN` is the FastAPI origin (dev default `http://127.0.0.1:8000`). Next.js writes the rewrite destination into the build, so set the same value for `pnpm build` and `pnpm start`; a production build or start without it fails naming the variable. It is server only: never prefix it with `NEXT_PUBLIC_`.
+
+Checks: `pnpm lint`, `pnpm typecheck`, `pnpm test`, `pnpm format:check`, and `pnpm build`. After a backend API change, regenerate the OpenAPI snapshot (`ENERGYIQ_UPDATE_SNAPSHOTS=1 uv run pytest backend/tests/api/test_openapi.py`), then run `pnpm gen:api` and commit both; `pnpm test` fails while the generated client is stale.
+
 ### Run the API server
 
 `ENERGYIQ_ENV` has no default: the server, `alembic`, and the maintenance command refuse to start without it (a `missing` error naming `env`), so a deploy can never fall back to dev settings by accident. Set it once per terminal for local work:
 
 ```powershell
 $env:ENERGYIQ_ENV = "dev"
-uv run uvicorn energyiq.main:create_app --factory --app-dir backend/src --no-access-log
+uv run uvicorn energyiq.main:create_app --factory --app-dir backend/src --no-access-log --no-proxy-headers
 ```
+
+`--no-proxy-headers` turns off Uvicorn's own proxy header handling, so `ENERGYIQ_FORWARDED_ALLOW_IPS` is the only rule for which peers may set the client address (spec 0010 AC-14).
 
 The server listens on `http://127.0.0.1:8000`. Interactive docs are at `/docs` (hidden when `ENERGYIQ_ENV=prod`). It needs the database below for anything but `/health`. Keep it on localhost and use synthetic data only.
 
@@ -104,7 +126,7 @@ The same session reaches the owner scoped routes: `POST /api/v1/properties` with
 
 For that meter, `POST /api/v1/meters/{id}/readings` accepts a decimal string such as `{"local_date":"2026-11-03","cumulative_kwh":"13049"}` or an offset `recorded_at`. `GET` at the same path lists readings. `PATCH /api/v1/meters/{id}/readings/{reading_id}` changes only `status` (`valid`, `flagged`, `voided`). Use `/api/v1/meters/{id}/events` to record a reset or replacement, then `POST` to `/events/{event_id}/approve` or `/reject`. `GET /api/v1/meters/{id}/consumption?from=...&to=...` computes measured kWh and coverage from stored history. Authenticated create and decide POSTs accept an optional `Idempotency-Key` for safe retries; a replay returns the original response with `Idempotent-Replayed: true`. See [spec 0009/0003](docs/specs/0009-phase-two-persistence-auth/0003-readings-events-api.md).
 
-kWh values travel as decimal strings in both directions, timestamps need an explicit offset and come back as UTC `Z` text, and every error is `application/problem+json` with a stable `code`. Settings: `ENERGYIQ_ENV` (`dev`, `test`, `prod`; required), `ENERGYIQ_MAX_BODY_BYTES`, `ENERGYIQ_CORS_ORIGINS` (JSON list), `ENERGYIQ_LOG_LEVEL`, `ENERGYIQ_SESSION_COOKIE_SECURE` (default `true` in `prod`, which also renames the cookie to `__Host-energyiq_session`), and `ENERGYIQ_TRUSTED_ORIGINS` (JSON list of browser origins the CSRF check accepts besides the server's own; default `["http://localhost:3000"]`, required in `prod`). See [spec 0008](docs/specs/0008-minimal-fastapi-application/index.md).
+kWh values travel as decimal strings in both directions, timestamps need an explicit offset and come back as UTC `Z` text, and every error is `application/problem+json` with a stable `code`. Settings: `ENERGYIQ_ENV` (`dev`, `test`, `prod`; required), `ENERGYIQ_MAX_BODY_BYTES`, `ENERGYIQ_CORS_ORIGINS` (JSON list), `ENERGYIQ_LOG_LEVEL`, `ENERGYIQ_SESSION_COOKIE_SECURE` (default `true` in `prod`, which also renames the cookie to `__Host-energyiq_session`), `ENERGYIQ_TRUSTED_ORIGINS` (JSON list of browser origins the CSRF check accepts besides the server's own; default `["http://localhost:3000"]`, required in `prod`), and `ENERGYIQ_FORWARDED_ALLOW_IPS` (JSON list of IP addresses or CIDR ranges, never hostnames, whose `X-Forwarded-For` is believed; default `["127.0.0.1", "::1"]` in `dev` and `test`; required in `prod`, where `[]` is allowed but must be written out). Every proxy between the browser and FastAPI must be in that list, or every user maps to that proxy's address and shares one login rate limit bucket. See [spec 0008](docs/specs/0008-minimal-fastapi-application/index.md).
 
 ### Run the database
 
