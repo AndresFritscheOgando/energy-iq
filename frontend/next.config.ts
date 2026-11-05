@@ -62,6 +62,14 @@ const securityHeaders = [
   },
 ];
 
+/**
+ * Pages are per user, so the browser must not store them (spec 0010 AC-13).
+ * Next.js sets this on dynamic pages already; the explicit rule keeps it true
+ * if a page ever becomes static. Hashed assets under `/_next/` keep their own
+ * immutable caching, and `/api` responses carry FastAPI's headers.
+ */
+const PAGE_SOURCE = "/((?!_next/|api/).*)";
+
 const nextConfig = (phase: string): NextConfig => {
   checkEdgeProxy(phase);
   return buildConfig(phase);
@@ -96,7 +104,10 @@ const buildConfig = (phase: string): NextConfig => ({
     ];
   },
   async headers() {
-    return [{ source: "/:path*", headers: securityHeaders }];
+    return [
+      { source: "/:path*", headers: securityHeaders },
+      { source: PAGE_SOURCE, headers: [{ key: "Cache-Control", value: "no-store" }] },
+    ];
   },
 });
 

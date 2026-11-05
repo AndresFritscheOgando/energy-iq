@@ -168,8 +168,10 @@ def test_attempt_rows_hold_keys_not_raw_values(
 def test_forwarded_clients_behind_the_proxy_get_separate_buckets(
     db_app: FastAPI, clock: Clock, probe: Probe
 ) -> None:
-    """Spec 0010 AC-14: the loopback Next.js proxy forwards each browser's
-    address, so one browser's register limit never blocks another."""
+    """Spec 0010 AC-14: a trusted proxy peer supplies each browser's address
+    in ``X-Forwarded-For``, so one browser's register limit never blocks
+    another. The Next.js rewrite does not add that address itself; it comes
+    from an edge proxy (``ENERGYIQ_EDGE_PROXY=true``, spec 0010 AC-18)."""
     proxy = TestClient(db_app, headers={CSRF_HEADER: "1"}, client=("127.0.0.1", 50000))
 
     def from_browser(address: str, email: str) -> int:

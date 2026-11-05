@@ -95,18 +95,32 @@ describe("next.config", () => {
     const rules = await config.headers?.();
 
     expect(config.poweredByHeader).toBe(false);
-    expect(rules).toEqual([
-      {
-        source: "/:path*",
-        headers: expect.arrayContaining([
-          { key: "X-Content-Type-Options", value: "nosniff" },
-          { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
-          { key: "X-Frame-Options", value: "DENY" },
-          { key: "Content-Security-Policy", value: "frame-ancestors 'none'" },
-          { key: "Permissions-Policy", value: "camera=(), microphone=(), geolocation=()" },
-        ]),
-      },
-    ]);
+    expect(rules?.[0]).toEqual({
+      source: "/:path*",
+      headers: expect.arrayContaining([
+        { key: "X-Content-Type-Options", value: "nosniff" },
+        { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
+        { key: "X-Frame-Options", value: "DENY" },
+        { key: "Content-Security-Policy", value: "frame-ancestors 'none'" },
+        { key: "Permissions-Policy", value: "camera=(), microphone=(), geolocation=()" },
+      ]),
+    });
+  });
+
+  it("sends Cache-Control: no-store on pages but not on /_next or /api (AC-13)", async () => {
+    const rules = await nextConfig(PHASE_DEVELOPMENT_SERVER).headers?.();
+    const rule = rules?.find((candidate) =>
+      candidate.headers.some((header) => header.key === "Cache-Control"),
+    );
+
+    expect(rule?.headers).toEqual([{ key: "Cache-Control", value: "no-store" }]);
+    const matches = (pathname: string) => new RegExp(`^${rule?.source}$`).test(pathname);
+    for (const page of ["/", "/login", "/register", "/Login", "/some/deep/page"]) {
+      expect(matches(page), page).toBe(true);
+    }
+    for (const other of ["/_next/static/chunks/a.js", "/_next/image", "/api/v1/auth/me"]) {
+      expect(matches(other), other).toBe(false);
+    }
   });
 });
 
