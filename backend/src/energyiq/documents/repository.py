@@ -4,6 +4,7 @@ Every read filters ``owner_id`` in the same statement, so a foreign or missing
 ID gives ``None`` and the route answers 404.
 """
 
+from typing import Any, cast
 from uuid import UUID
 
 from sqlalchemy import func, select
@@ -54,6 +55,38 @@ def latest_run(session: Session, document_id: UUID) -> ExtractionRunRow | None:
     ).one_or_none()
 
 
+def extractions(
+    session: Session, document_id: UUID
+) -> list[tuple[ExtractionRunRow, dict[str, Any]]]:
+    """Succeeded runs that hold a validated proposal, newest first."""
+    found: list[tuple[ExtractionRunRow, dict[str, Any]]] = []
+    for run in session.scalars(
+        select(ExtractionRunRow)
+        .where(
+            ExtractionRunRow.document_id == document_id,
+            ExtractionRunRow.state == "succeeded",
+        )
+        .order_by(ExtractionRunRow.run_number.desc())
+        .execution_options(populate_existing=True)
+    ):
+        extraction: Any = (run.output or {}).get("extraction")
+        proposal: Any = (
+            cast("dict[str, Any]", extraction).get("proposal")
+            if isinstance(extraction, dict)
+            else None
+        )
+        if isinstance(proposal, dict):
+            found.append((run, cast("dict[str, Any]", proposal)))
+    return found
+
+
+def latest_extraction(
+    session: Session, document_id: UUID
+) -> tuple[ExtractionRunRow, dict[str, Any]] | None:
+    found = extractions(session, document_id)
+    return found[0] if found else None
+
+
 def lock_runs(session: Session, document_id: UUID) -> list[ExtractionRunRow]:
     """Every run of one document, locked, newest first."""
     return list(
@@ -100,4 +133,15 @@ def is_source_of_revision(session: Session, document_id: UUID) -> bool:
             .limit(1)
         )
         is not None
+    )
+
+
+def storage_key_exists(session: Session, storage_key: UUID) -> bool:
+    return (
+        session.scalar(
+            select(func.count())
+            .select_from(SourceDocumentRow)
+            .where(SourceDocumentRow.storage_key == storage_key)
+        )
+        == 1
     )

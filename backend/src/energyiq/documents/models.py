@@ -83,7 +83,7 @@ class ExtractionRunRow(Base):
     finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     model: Mapped[str | None] = mapped_column(Text)
     prompt_version: Mapped[str | None] = mapped_column(Text)
-    output: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
+    output: Mapped[dict[str, Any] | None] = mapped_column(JSONB(none_as_null=True))
 
     __table_args__ = (
         UniqueConstraint("document_id", "run_number", name="uq_extraction_runs_number"),

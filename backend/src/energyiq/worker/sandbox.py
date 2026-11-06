@@ -78,6 +78,22 @@ def _environment() -> dict[str, str]:
     return {}
 
 
+def _wait_without_reaping(process: subprocess.Popen[bytes]) -> None:
+    """Block until the child has exited, leaving its pid unreaped on POSIX.
+
+    ``waitid`` with ``WNOWAIT`` keeps the zombie, so the group id cannot be
+    recycled before ``_kill`` signals the group.
+    """
+    if _WINDOWS:
+        process.wait()
+        return
+    posix: Any = os
+    try:
+        posix.waitid(posix.P_PID, process.pid, posix.WEXITED | posix.WNOWAIT)
+    except ChildProcessError:
+        pass
+
+
 def _kill(process: subprocess.Popen[bytes]) -> None:
     if _WINDOWS and process.poll() is not None:
         return
@@ -108,7 +124,21 @@ def _feed(stream: IO[bytes], data: bytes) -> None:
             pass
 
 
-def _parse(raw: bytes, max_text_bytes: int) -> ChildResult:
+# The only failure codes the parent accepts from the child. Anything else is
+# untrusted text and becomes ``pdf_parse_failed`` before it reaches a run row.
+CHILD_CODES = frozenset(
+    {
+        "pdf_encrypted",
+        "pdf_malformed",
+        "pdf_too_many_pages",
+        "pdf_text_too_large",
+        "pdf_parse_resource",
+        "pdf_parse_timeout",
+    }
+)
+
+
+def _parse(raw: bytes, max_text_bytes: int, max_pages: int) -> ChildResult:
     try:
         loaded: object = json.loads(raw)
     except ValueError:
@@ -121,6 +151,7 @@ def _parse(raw: bytes, max_text_bytes: int) -> ChildResult:
         value.get("ok") is True
         and isinstance(count, int)
         and not isinstance(count, bool)
+        and 0 <= count <= max_pages
     ):
         pages = parse_pages(
             value.get("pages"), page_count=count, max_text_bytes=max_text_bytes
@@ -129,7 +160,7 @@ def _parse(raw: bytes, max_text_bytes: int) -> ChildResult:
             return ChildResult(False, "pdf_parse_failed")
         return ChildResult(True, None, count, pages)
     code = value.get("code")
-    if value.get("ok") is False and isinstance(code, str):
+    if value.get("ok") is False and isinstance(code, str) and code in CHILD_CODES:
         return ChildResult(False, code)
     return ChildResult(False, "pdf_parse_failed")
 
@@ -158,16 +189,20 @@ def run_pdf_child(
             str(limits.memory_bytes),
         ]
     )
-    process = subprocess.Popen(
-        argv,
-        stdin=subprocess.PIPE,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.DEVNULL,
-        env=_environment(),
-        cwd=os.path.dirname(sys.executable) if _WINDOWS else "/",
-        start_new_session=not _WINDOWS,
-        creationflags=subprocess.CREATE_NEW_PROCESS_GROUP if _WINDOWS else 0,  # pyright: ignore[reportAttributeAccessIssue]
-    )
+    try:
+        process = subprocess.Popen(
+            argv,
+            stdin=subprocess.PIPE,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.DEVNULL,
+            env=_environment(),
+            cwd=os.path.dirname(sys.executable) if _WINDOWS else "/",
+            start_new_session=not _WINDOWS,
+            creationflags=subprocess.CREATE_NEW_PROCESS_GROUP if _WINDOWS else 0,  # pyright: ignore[reportAttributeAccessIssue]
+        )
+    except OSError:
+        # No pids left, or no memory to fork: the system, not the file, failed.
+        return ChildResult(False, "pdf_parse_resource")
     assert process.stdin is not None and process.stdout is not None
     timed_out = threading.Event()
 
@@ -184,10 +219,14 @@ def run_pdf_child(
         too_big = len(output) > MAX_OUTPUT_BYTES
         if too_big:
             _kill(process)
-        process.wait()
+        _wait_without_reaping(process)
     finally:
         timer.cancel()
+        # The child is not reaped yet, so its pid still names its process group
+        # and nothing else can own it. Kill the whole group (a grandchild the
+        # child left behind dies here), then reap.
         _kill(process)
+        process.wait()
         process.stdout.close()
         feeder.join(timeout=1)
     if timed_out.is_set():
@@ -196,7 +235,7 @@ def run_pdf_child(
         return ChildResult(False, "pdf_parse_resource")
     if process.returncode != 0 and not output:
         return ChildResult(False, _crash_code(process.returncode))
-    return _parse(output, limits.max_text_bytes)
+    return _parse(output, limits.max_text_bytes, limits.max_pages)
 
 
 def _crash_code(returncode: int) -> str:

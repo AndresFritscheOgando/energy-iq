@@ -1,6 +1,75 @@
 {
   "components": {
     "schemas": {
+      "CandidateOut": {
+        "properties": {
+          "evidence_verified": {
+            "title": "Evidence Verified",
+            "type": "boolean"
+          },
+          "issues": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Issues",
+            "type": "array"
+          },
+          "page_number": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Page Number"
+          },
+          "quote": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Quote"
+          },
+          "raw_value": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Raw Value"
+          },
+          "value": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Value"
+          }
+        },
+        "required": [
+          "value",
+          "raw_value",
+          "quote",
+          "page_number",
+          "evidence_verified",
+          "issues"
+        ],
+        "title": "CandidateOut",
+        "type": "object"
+      },
       "ConfirmRequest": {
         "additionalProperties": false,
         "properties": {
@@ -270,6 +339,27 @@
         "title": "ConsumptionSummaryResponse",
         "type": "object"
       },
+      "ContradictionOut": {
+        "properties": {
+          "candidates": {
+            "items": {
+              "$ref": "#/components/schemas/CandidateOut"
+            },
+            "title": "Candidates",
+            "type": "array"
+          },
+          "field": {
+            "title": "Field",
+            "type": "string"
+          }
+        },
+        "required": [
+          "field",
+          "candidates"
+        ],
+        "title": "ContradictionOut",
+        "type": "object"
+      },
       "CorrectionCreate": {
         "additionalProperties": false,
         "properties": {
@@ -515,6 +605,7 @@
       },
       "DraftCreate": {
         "additionalProperties": false,
+        "description": "A new draft. ``document`` origin marks a value kept as the model proposed it.\n\nIt needs ``source_document_id``, and the route checks that the value equals\nthe retained proposal. A value the owner typed or changed is ``manual``.",
         "properties": {
           "billed_kwh": {
             "anyOf": [
@@ -564,7 +655,10 @@
           },
           "field_origins": {
             "additionalProperties": {
-              "const": "manual",
+              "enum": [
+                "manual",
+                "document"
+              ],
               "type": "string"
             },
             "default": {},
@@ -606,6 +700,18 @@
               }
             ],
             "title": "Period Start"
+          },
+          "source_document_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Document Id"
           },
           "total_dop": {
             "anyOf": [
@@ -814,6 +920,66 @@
           "decided_at"
         ],
         "title": "EventOut",
+        "type": "object"
+      },
+      "ExtractionOut": {
+        "description": "A run that produced a proposal. Prompts and page text are not returned.",
+        "properties": {
+          "finished_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Finished At"
+          },
+          "model": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Model"
+          },
+          "prompt_version": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Prompt Version"
+          },
+          "proposal": {
+            "$ref": "#/components/schemas/ProposalOut"
+          },
+          "run_id": {
+            "format": "uuid",
+            "title": "Run Id",
+            "type": "string"
+          },
+          "run_number": {
+            "title": "Run Number",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "run_id",
+          "run_number",
+          "model",
+          "prompt_version",
+          "finished_at",
+          "proposal"
+        ],
+        "title": "ExtractionOut",
         "type": "object"
       },
       "GapOut": {
@@ -1249,6 +1415,34 @@
         "title": "Page[EventOut]",
         "type": "object"
       },
+      "Page_ExtractionOut_": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/ExtractionOut"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "next_cursor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Cursor"
+          }
+        },
+        "required": [
+          "items",
+          "next_cursor"
+        ],
+        "title": "Page[ExtractionOut]",
+        "type": "object"
+      },
       "Page_InvoiceOut_": {
         "properties": {
           "items": {
@@ -1539,6 +1733,150 @@
           }
         },
         "title": "PropertyPatch",
+        "type": "object"
+      },
+      "ProposalConflictOut": {
+        "properties": {
+          "code": {
+            "title": "Code",
+            "type": "string"
+          },
+          "fields": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Fields",
+            "type": "array"
+          }
+        },
+        "required": [
+          "code",
+          "fields"
+        ],
+        "title": "ProposalConflictOut",
+        "type": "object"
+      },
+      "ProposalOut": {
+        "properties": {
+          "conflicts": {
+            "items": {
+              "$ref": "#/components/schemas/ProposalConflictOut"
+            },
+            "title": "Conflicts",
+            "type": "array"
+          },
+          "contradictions": {
+            "items": {
+              "$ref": "#/components/schemas/ContradictionOut"
+            },
+            "title": "Contradictions",
+            "type": "array"
+          },
+          "fields": {
+            "items": {
+              "$ref": "#/components/schemas/ProposedFieldOut"
+            },
+            "title": "Fields",
+            "type": "array"
+          },
+          "requires_review": {
+            "const": true,
+            "title": "Requires Review",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "fields",
+          "contradictions",
+          "conflicts",
+          "requires_review"
+        ],
+        "title": "ProposalOut",
+        "type": "object"
+      },
+      "ProposedFieldOut": {
+        "description": "One proposed value with where it was read. Never a confirmed value.",
+        "properties": {
+          "evidence_verified": {
+            "title": "Evidence Verified",
+            "type": "boolean"
+          },
+          "issues": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Issues",
+            "type": "array"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "page_number": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Page Number"
+          },
+          "quote": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Quote"
+          },
+          "state": {
+            "enum": [
+              "explicit",
+              "inferred",
+              "not_found"
+            ],
+            "title": "State",
+            "type": "string"
+          },
+          "uncertainty": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Uncertainty"
+          },
+          "value": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Value"
+          }
+        },
+        "required": [
+          "name",
+          "state",
+          "value",
+          "quote",
+          "page_number",
+          "uncertainty",
+          "issues",
+          "evidence_verified"
+        ],
+        "title": "ProposedFieldOut",
         "type": "object"
       },
       "ReadingCreate": {
@@ -1893,6 +2231,18 @@
             "title": "Revision Number",
             "type": "integer"
           },
+          "source_document_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Document Id"
+          },
           "status": {
             "enum": [
               "draft",
@@ -1929,6 +2279,7 @@
           "issue_date",
           "due_date",
           "field_origins",
+          "source_document_id",
           "previous_revision_id",
           "changed_fields",
           "old_values"
@@ -2747,6 +3098,80 @@
           }
         },
         "summary": "Get Document",
+        "tags": [
+          "documents"
+        ]
+      }
+    },
+    "/api/v1/documents/{document_id}/extractions": {
+      "get": {
+        "description": "Proposals of this document, newest run first.\n\nA document holds at most ``doc_max_runs`` runs, so one page is the whole\nlist and ``next_cursor`` is always null. A run that failed, or whose model\noutput was unusable, has no proposal and is not listed.",
+        "operationId": "list_extractions",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "document_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Document Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Page_ExtractionOut_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "List Extractions",
         "tags": [
           "documents"
         ]

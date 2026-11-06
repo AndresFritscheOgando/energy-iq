@@ -49,13 +49,27 @@ class DraftFields(BaseModel):
 
 
 class DraftCreate(DraftFields):
-    field_origins: dict[str, Literal["manual"]] = {}
+    """A new draft. ``document`` origin marks a value kept as the model proposed it.
+
+    It needs ``source_document_id``, and the route checks that the value equals
+    the retained proposal. A value the owner typed or changed is ``manual``.
+    """
+
+    source_document_id: UUID | None = None
+    field_origins: dict[str, Literal["manual", "document"]] = {}
 
     @model_validator(mode="after")
     def origins_match(self) -> "DraftCreate":
         if any(name not in FIELDS for name in self.field_origins):
             raise PydanticCustomError(
                 "invalid_origin", "Field origin names must match invoice fields."
+            )
+        if (
+            self.source_document_id is None
+            and "document" in self.field_origins.values()
+        ):
+            raise PydanticCustomError(
+                "invalid_origin", "A document origin needs a source document."
             )
         return self
 
@@ -104,6 +118,7 @@ class RevisionOut(BaseModel):
     issue_date: date | None
     due_date: date | None
     field_origins: dict[str, str]
+    source_document_id: UUID | None
     previous_revision_id: UUID | None
     changed_fields: list[str]
     old_values: dict[str, str | None]

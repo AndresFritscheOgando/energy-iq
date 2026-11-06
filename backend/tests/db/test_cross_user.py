@@ -74,6 +74,7 @@ ID_ROUTES: dict[tuple[str, str], Call] = {
     ("POST", f"{V1}/meters/{{meter_id}}/documents"): Call(),
     ("GET", f"{V1}/documents/{{document_id}}"): Call(),
     ("GET", f"{V1}/documents/{{document_id}}/source"): Call(),
+    ("GET", f"{V1}/documents/{{document_id}}/extractions"): Call(),
     ("POST", f"{V1}/documents/{{document_id}}/retry"): Call(),
     ("DELETE", f"{V1}/documents/{{document_id}}"): Call(),
 }
