@@ -213,7 +213,7 @@ pnpm exec playwright install chromium
 pnpm test:e2e
 ```
 
-**Next up:** get a fresh model review of spec 0011, then resolve any findings before accepting it. P3-01 is complete and [spec 0010](docs/specs/0010-nextjs-foundation-session/index.md) is Accepted. Reading semantics and discontinuity rules are documented in [12-METER-SEMANTICS](docs/12-METER-SEMANTICS.md) (P1-06).
+**Next up:** spec 0011 is Accepted; continue Phase 4 with the `/check verify` for P4-02 and spec 0012 child 0004. P3-01 is complete and [spec 0010](docs/specs/0010-nextjs-foundation-session/index.md) is Accepted. Reading semantics and discontinuity rules are documented in [12-METER-SEMANTICS](docs/12-METER-SEMANTICS.md) (P1-06).
 
 ## Documentation
 
