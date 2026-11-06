@@ -59,12 +59,12 @@ function labelOf(name: string): string {
   return name in LABELS ? LABELS[name as keyof typeof LABELS] : name;
 }
 
-function issueText(code: string): string {
+export function issueText(code: string): string {
   const known = t.issue as Record<string, string>;
   return known[code] ?? t.issueOther;
 }
 
-function conflictText(code: string, names: string): string {
+export function conflictText(code: string, names: string): string {
   const known = t.conflict as Record<string, (names: string) => string>;
   return (known[code] ?? t.conflictOther)(names);
 }
