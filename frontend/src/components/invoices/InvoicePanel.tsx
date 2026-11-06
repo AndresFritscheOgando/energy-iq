@@ -319,7 +319,7 @@ export function InvoicePanel({
           This meter is inactive. Its invoices stay available to read, but they cannot be changed.
         </p>
       )}
-      <DocumentUpload meterId={meterId} active={active} />
+      <DocumentUpload meterId={meterId} active={active} distributor={distributor} />
       {active && (
         <form onSubmit={(event) => void save(event)} className="space-y-3 border-b pb-5">
           <h3 className="font-medium">New manual invoice</h3>

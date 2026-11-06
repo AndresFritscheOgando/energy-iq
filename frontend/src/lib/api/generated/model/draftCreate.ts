@@ -7,6 +7,12 @@
 import type { Distributor } from './distributor';
 import type { DraftCreateFieldOrigins } from './draftCreateFieldOrigins';
 
+/**
+ * A new draft. ``document`` origin marks a value kept as the model proposed it.
+ *
+ * It needs ``source_document_id``, and the route checks that the value equals
+ * the retained proposal. A value the owner typed or changed is ``manual``.
+ */
 export interface DraftCreate {
   billed_kwh?: string | null;
   distributor?: Distributor | null;
@@ -16,5 +22,6 @@ export interface DraftCreate {
   issue_date?: string | null;
   period_end?: string | null;
   period_start?: string | null;
+  source_document_id?: string | null;
   total_dop?: string | null;
 }

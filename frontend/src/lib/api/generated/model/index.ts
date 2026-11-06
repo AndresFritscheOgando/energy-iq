@@ -5,12 +5,14 @@
  * OpenAPI spec version: 0.1.0
  */
 
+export * from './candidateOut';
 export * from './confirmRequest';
 export * from './conflictEntryOut';
 export * from './conflictOut';
 export * from './consumptionProblem';
 export * from './consumptionSummaryRequest';
 export * from './consumptionSummaryResponse';
+export * from './contradictionOut';
 export * from './correctionCreate';
 export * from './correctionCreateFieldOrigins';
 export * from './credentialsIn';
@@ -24,6 +26,7 @@ export * from './duplicateIdOutCollection';
 export * from './eventCreate';
 export * from './eventIn';
 export * from './eventOut';
+export * from './extractionOut';
 export * from './gapOut';
 export * from './gapReason';
 export * from './healthResponse';
@@ -43,6 +46,7 @@ export * from './meterEventType';
 export * from './meterOut';
 export * from './meterPatch';
 export * from './pageEventOut';
+export * from './pageExtractionOut';
 export * from './pageInvoiceOut';
 export * from './pageMeterOut';
 export * from './pagePropertyOut';
@@ -51,6 +55,10 @@ export * from './problem';
 export * from './propertyCreate';
 export * from './propertyOut';
 export * from './propertyPatch';
+export * from './proposalConflictOut';
+export * from './proposalOut';
+export * from './proposedFieldOut';
+export * from './proposedFieldOutState';
 export * from './readingCreate';
 export * from './readingIn';
 export * from './readingOut';

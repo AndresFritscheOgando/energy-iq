@@ -4,12 +4,13 @@
  * Upload a bill PDF to a meter and watch its extraction run (spec 0012/0005 AC-1).
  *
  * There is no list route for documents yet, so this shows only the uploads made
- * on this page visit. The review screen that reads proposed values comes later.
+ * on this page visit. A document ready for review opens the proposal review.
  */
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useRef, useState, type FormEvent } from "react";
 
 import { Button } from "@/components/ui/button";
+import { ProposalReview } from "@/components/documents/ProposalReview";
 import { Input } from "@/components/ui/input";
 import { ApiError } from "@/lib/api/errors";
 import {
@@ -19,7 +20,7 @@ import {
   retryDocument,
   uploadDocument,
 } from "@/lib/api/generated/documents/documents";
-import type { DocumentOut } from "@/lib/api/generated/model";
+import type { Distributor, DocumentOut } from "@/lib/api/generated/model";
 import { useIdempotencyKey } from "@/lib/api/use-idempotency-key";
 import { en } from "@/messages/en";
 
@@ -37,11 +38,32 @@ function uploadMessage(error: unknown): string {
   return t.failed;
 }
 
+function retryMessage(error: unknown): string {
+  if (error instanceof ApiError) {
+    if (error.code === "retries_exhausted") return t.retryExhausted;
+    if (error.code === "run_active") return t.retryBusy;
+    if (error.code === "too_many_active") return t.tooMany;
+    if (error.code === "meter_inactive") return t.inactive;
+  }
+  return t.retryFailed;
+}
+
 function isSettled(doc: DocumentOut): boolean {
   return doc.run === null || (doc.run.state !== "queued" && doc.run.state !== "running");
 }
 
-function DocumentRow({ initial }: { initial: DocumentOut }) {
+function DocumentRow({
+  initial,
+  meterId,
+  distributor,
+  active,
+}: {
+  initial: DocumentOut;
+  meterId: string;
+  distributor: Distributor;
+  active: boolean;
+}) {
+  const [reviewing, setReviewing] = useState(false);
   const queryClient = useQueryClient();
   const key = useIdempotencyKey();
   const { data } = useQuery({
@@ -61,34 +83,62 @@ function DocumentRow({ initial }: { initial: DocumentOut }) {
   });
 
   return (
-    <li className="flex flex-wrap items-center justify-between gap-2 rounded-md border p-3 text-sm">
-      <div>
-        <span className="font-medium">{t.state[doc.state]}</span>
-        <span className="ml-2 text-xs text-muted-foreground">
-          {(doc.size_bytes / 1024).toFixed(0)} KB
-        </span>
-        {doc.state === "failed" && <p className="text-muted-foreground">{t.failedReason}</p>}
+    <li className="space-y-3 rounded-md border p-3 text-sm">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div>
+          <span className="font-medium">{t.state[doc.state]}</span>
+          <span className="ml-2 text-xs text-muted-foreground">
+            {(doc.size_bytes / 1024).toFixed(0)} KB
+          </span>
+          {doc.state === "failed" && <p className="text-muted-foreground">{t.failedReason}</p>}
+          {retry.isError && (
+            <p role="alert" className="text-destructive">
+              {retryMessage(retry.error)}
+            </p>
+          )}
+        </div>
+        <div className="flex items-center gap-2">
+          {doc.state === "needs_review" && active && (
+            <Button
+              type="button"
+              variant="outline"
+              aria-expanded={reviewing}
+              onClick={() => setReviewing((open) => !open)}
+            >
+              {reviewing ? t.closeReview : t.review}
+            </Button>
+          )}
+          {doc.state === "failed" && (
+            <Button
+              type="button"
+              variant="outline"
+              disabled={retry.isPending}
+              onClick={() => retry.mutate()}
+            >
+              {t.retry}
+            </Button>
+          )}
+          <a className="underline underline-offset-4" href={getDownloadSourceUrl(doc.id)} download>
+            {t.download}
+          </a>
+        </div>
       </div>
-      <div className="flex items-center gap-2">
-        {doc.state === "failed" && (
-          <Button
-            type="button"
-            variant="outline"
-            disabled={retry.isPending}
-            onClick={() => retry.mutate()}
-          >
-            {t.retry}
-          </Button>
-        )}
-        <a className="underline underline-offset-4" href={getDownloadSourceUrl(doc.id)} download>
-          {t.download}
-        </a>
-      </div>
+      {reviewing && doc.state === "needs_review" && (
+        <ProposalReview documentId={doc.id} meterId={meterId} distributor={distributor} />
+      )}
     </li>
   );
 }
 
-export function DocumentUpload({ meterId, active }: { meterId: string; active: boolean }) {
+export function DocumentUpload({
+  meterId,
+  active,
+  distributor,
+}: {
+  meterId: string;
+  active: boolean;
+  distributor: Distributor;
+}) {
   const key = useIdempotencyKey();
   const inputRef = useRef<HTMLInputElement>(null);
   const [problem, setProblem] = useState<string | null>(null);
@@ -96,7 +146,9 @@ export function DocumentUpload({ meterId, active }: { meterId: string; active: b
   const upload = useMutation({
     mutationFn: (file: File) => {
       const form = new FormData();
-      form.append("file", file, file.name);
+      // Some browsers label a real PDF with another type (or none). The server
+      // checks the bytes, so send the type it expects and let it decide.
+      form.append("file", new Blob([file], { type: "application/pdf" }), file.name);
       const fingerprint = `${file.name}:${file.size}:${file.lastModified}`;
       return uploadDocument(meterId, {
         body: form,
@@ -155,7 +207,13 @@ export function DocumentUpload({ meterId, active }: { meterId: string; active: b
           <h4 className="text-sm font-medium">{t.listTitle}</h4>
           <ul className="space-y-2">
             {uploaded.map((doc) => (
-              <DocumentRow key={doc.id} initial={doc} />
+              <DocumentRow
+                key={doc.id}
+                initial={doc}
+                meterId={meterId}
+                distributor={distributor}
+                active={active}
+              />
             ))}
           </ul>
         </div>
