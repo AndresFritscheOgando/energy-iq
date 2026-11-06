@@ -75,7 +75,7 @@ def test_operation_ids_are_route_names_and_unique(app: FastAPI) -> None:
     }
     ids = list(operations.values())
 
-    assert len(ids) == 36
+    assert len(ids) == 37
     assert len(set(ids)) == len(ids)
     assert operations[("post", "/api/v1/auth/login")] == "login"
     assert operations[("get", "/api/v1/properties")] == "list_properties"

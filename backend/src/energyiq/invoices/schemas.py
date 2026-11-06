@@ -11,8 +11,10 @@ from energyiq.properties.models import Distributor
 
 Kwh = Annotated[str, StringConstraints(pattern=r"^[0-9]{1,12}(\.[0-9]{1,6})?$")]
 Money = Annotated[str, StringConstraints(pattern=r"^[0-9]{1,14}(\.[0-9]{1,2})?$")]
+TariffClass = Annotated[str, StringConstraints(pattern=r"^[A-Z0-9][A-Z0-9-]{0,15}$")]
 FIELDS = (
     "distributor",
+    "tariff_class",
     "period_start",
     "period_end",
     "billed_kwh",
@@ -27,6 +29,7 @@ class DraftFields(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
     distributor: Distributor | None = None
+    tariff_class: TariffClass | None = None
     period_start: date | None = None
     period_end: date | None = None
     billed_kwh: Kwh | None = None
@@ -110,6 +113,7 @@ class RevisionOut(BaseModel):
     created_at: str
     confirmed_at: str | None
     distributor: Distributor | None
+    tariff_class: str | None
     period_start: date | None
     period_end: date | None
     billed_kwh: str | None

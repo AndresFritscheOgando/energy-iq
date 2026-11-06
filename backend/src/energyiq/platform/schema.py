@@ -14,6 +14,7 @@ MODEL_MODULES = (
     "energyiq.readings.persistence.rows",
     "energyiq.invoices.models",
     "energyiq.documents.models",
+    "energyiq.tariffs.models",
 )
 
 

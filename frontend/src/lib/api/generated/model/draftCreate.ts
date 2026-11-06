@@ -23,5 +23,6 @@ export interface DraftCreate {
   period_end?: string | null;
   period_start?: string | null;
   source_document_id?: string | null;
+  tariff_class?: string | null;
   total_dop?: string | null;
 }

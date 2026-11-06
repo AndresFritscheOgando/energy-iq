@@ -55,6 +55,7 @@ from energyiq.platform.settings import Settings
 from energyiq.properties.router import router as properties_router
 from energyiq.readings.api.router import router as readings_router
 from energyiq.readings.api.stored_router import router as stored_router
+from energyiq.reconciliation.router import router as reconciliation_router
 
 READINESS_POOL_TIMEOUT_SECONDS = 2
 IDEMPOTENCY_KEY_HEADER = "Idempotency-Key"
@@ -146,6 +147,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(stored_router)
     app.include_router(invoices_router)
     app.include_router(documents_router)
+    app.include_router(reconciliation_router)
     _install_openapi(app)
 
     # add_middleware puts each new layer outside the previous ones.

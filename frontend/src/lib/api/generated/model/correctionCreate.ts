@@ -18,5 +18,6 @@ export interface CorrectionCreate {
   issue_date?: string | null;
   period_end?: string | null;
   period_start?: string | null;
+  tariff_class?: string | null;
   total_dop?: string | null;
 }

@@ -62,7 +62,7 @@ Design: [spec 0012](specs/0012-phase-four-bill-intelligence/index.md) entered In
 - P4-03 PDF native text parsing; evaluate OCR/vision fallback. Native text built 2026-11-05 (page text, exact evidence spans, safe scan outcome, published synthetic baseline in `docs/evals/`). The OCR or vision evaluation is not run, so no fallback is enabled.
 - P4-04 Introduce Ollama behind strict structured extraction contract.
 - P4-05 Build human corrections and provenance UI. Partly built 2026-11-06: `GET /documents/{id}/extractions`, document sourced drafts, and a proposal review on the meter page (evidence beside each value, edit, save as draft). Not built: a stand alone `/invoices/[invoiceId]` route, a live browser pass of the review with a real proposal, and the accessibility checks in the browser (AC-5).
-- P4-06 Effective-dated tariff rules with official sources; reconciliation and test fixtures.
+- P4-06 Effective-dated tariff rules with official sources; reconciliation and test fixtures. Machinery and reconciliation route built 2026-11-06 with synthetic fixtures; no SIE rate published, awaiting a human check of SIE-121-2026-TF.
 
 ## Phase 5 tickets
 - P5-01 Define business forecast target and data resolution.

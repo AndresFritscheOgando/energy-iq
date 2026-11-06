@@ -57,6 +57,9 @@ ID_ROUTES: dict[tuple[str, str], Call] = {
     ("POST", f"{V1}/meters/{{meter_id}}/events/{{event_id}}/approve"): Call(),
     ("POST", f"{V1}/meters/{{meter_id}}/events/{{event_id}}/reject"): Call(),
     ("GET", f"{V1}/meters/{{meter_id}}/consumption"): Call(params=WINDOW),
+    ("GET", f"{V1}/meters/{{meter_id}}/reconciliation"): Call(
+        params={"invoice_id": str(uuid4())}
+    ),
     ("POST", f"{V1}/meters/{{meter_id}}/invoices"): Call({}),
     ("GET", f"{V1}/meters/{{meter_id}}/invoices"): Call(),
     ("GET", f"{V1}/invoices/{{invoice_id}}"): Call(),

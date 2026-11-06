@@ -82,6 +82,7 @@ def _revision_out(row: InvoiceRevisionRow) -> RevisionOut:
         created_at=format_instant(row.created_at),
         confirmed_at=format_instant(row.confirmed_at) if row.confirmed_at else None,
         distributor=Distributor(row.distributor) if row.distributor else None,
+        tariff_class=row.tariff_class,
         period_start=row.period_start,
         period_end=row.period_end,
         billed_kwh=f"{row.billed_kwh:.6f}" if row.billed_kwh is not None else None,
