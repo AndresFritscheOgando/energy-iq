@@ -51,9 +51,9 @@ Phase 2 gate passed on 2026-11-04: owner isolated REST CRUD (route enumerated cr
 
 ## Phase 3 tickets
 - P3-01 Next.js setup, typed API layer and session strategy. Complete 2026-11-05 from [spec 0010](specs/0010-nextjs-foundation-session/index.md), now Accepted. Its [verification record](specs/0010-nextjs-foundation-session/verify.md) is fully checked, including AC-14 and AC-18. The fresh model [rereview](reviews/2026-11-05-features-p3-01-rereview.md) and [scheme header review](reviews/2026-11-05-features-proxy-proto.md) approved with nits. The current tree passed the live AC-18 echo probe again on 2026-11-05. [ADR-008](adr/ADR-008-frontend-data-access.md) records the proxy coverage invariant.
-- P3-02 Property selector, meter creation and readings form. Built 2026-11-05 from [spec 0011](specs/0011-product-ui-readings-consumption/index.md), child [0001](specs/0011-product-ui-readings-consumption/0001-properties-meters-readings.md). The warning focus race found by `/check verify` was fixed with a deterministic regression test. The live browser suite and frontend tests passed after the fix; fresh review remains.
-- P3-03 Consumption trends/chart with empty, partial and error states. Built 2026-11-05 from [spec 0011](specs/0011-product-ui-readings-consumption/index.md), child [0002](specs/0011-product-ui-readings-consumption/0002-consumption-chart.md). The live browser suite passed after the focus fix; fresh review remains.
-- P3-04 Accessibility/interaction tests and end-to-end seed demo. Built 2026-11-05 from [spec 0011](specs/0011-product-ui-readings-consumption/index.md), child [0003](specs/0011-product-ui-readings-consumption/0003-accessibility-e2e-demo.md). The live browser suite passed 56 cases after the focus fix; fresh review remains.
+- P3-02 Property selector, meter creation and readings form. Built 2026-11-05 from [spec 0011](specs/0011-product-ui-readings-consumption/index.md), child [0001](specs/0011-product-ui-readings-consumption/0001-properties-meters-readings.md). The warning focus race found by `/check verify` was fixed with a deterministic regression test. Fresh model reviews approved with nits, the minors were fixed, and `/check verify` passed on 2026-11-05 (58 browser cases).
+- P3-03 Consumption trends/chart with empty, partial and error states. Built 2026-11-05 from [spec 0011](specs/0011-product-ui-readings-consumption/index.md), child [0002](specs/0011-product-ui-readings-consumption/0002-consumption-chart.md). Reviewed and verified 2026-11-05 (see P3-02).
+- P3-04 Accessibility/interaction tests and end-to-end seed demo. Built 2026-11-05 from [spec 0011](specs/0011-product-ui-readings-consumption/index.md), child [0003](specs/0011-product-ui-readings-consumption/0003-accessibility-e2e-demo.md). Reviewed and verified 2026-11-05: 58 browser cases passed.
 
 ## Phase 4 tickets
 Design: [spec 0012](specs/0012-phase-four-bill-intelligence/index.md) entered In Progress on 2026-11-05. P4-01 has been built and checked, while the Phase 3 fresh review is still needed before Phase 4 becomes the current implementation phase.
@@ -61,8 +61,8 @@ Design: [spec 0012](specs/0012-phase-four-bill-intelligence/index.md) entered In
 - P4-02 Safe file upload and extraction job lifecycle.
 - P4-03 PDF native text parsing; evaluate OCR/vision fallback. Native text built 2026-11-05 (page text, exact evidence spans, safe scan outcome, published synthetic baseline in `docs/evals/`). The OCR or vision evaluation is not run, so no fallback is enabled.
 - P4-04 Introduce Ollama behind strict structured extraction contract.
-- P4-05 Build human corrections and provenance UI.
-- P4-06 Effective-dated tariff rules with official sources; reconciliation and test fixtures.
+- P4-05 Build human corrections and provenance UI. Partly built 2026-11-06: `GET /documents/{id}/extractions`, document sourced drafts, and a proposal review on the meter page (evidence beside each value, edit, save as draft). Not built: a stand alone `/invoices/[invoiceId]` route, a live browser pass of the review with a real proposal, and the accessibility checks in the browser (AC-5).
+- P4-06 Effective-dated tariff rules with official sources; reconciliation and test fixtures. Machinery and reconciliation route built 2026-11-06 with synthetic fixtures; no SIE rate published, awaiting a human check of SIE-121-2026-TF.
 
 ## Phase 5 tickets
 - P5-01 Define business forecast target and data resolution.

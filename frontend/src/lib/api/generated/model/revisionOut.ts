@@ -26,6 +26,8 @@ export interface RevisionOut {
   period_start: string | null;
   previous_revision_id: string | null;
   revision_number: number;
+  source_document_id: string | null;
   status: RevisionOutStatus;
+  tariff_class: string | null;
   total_dop: string | null;
 }

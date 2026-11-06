@@ -65,6 +65,7 @@ class InvoiceRevisionRow(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     confirmed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     distributor: Mapped[str | None] = mapped_column(Text)
+    tariff_class: Mapped[str | None] = mapped_column(Text)
     period_start: Mapped[date | None] = mapped_column(Date)
     period_end: Mapped[date | None] = mapped_column(Date)
     billed_kwh: Mapped[Decimal | None] = mapped_column(Numeric(18, 6))
@@ -103,6 +104,9 @@ class InvoiceRevisionRow(Base):
         CheckConstraint("billed_kwh >= 0", name="billed_kwh_nonnegative"),
         CheckConstraint("total_dop >= 0", name="total_nonnegative"),
         CheckConstraint("energy_charge_dop >= 0", name="energy_nonnegative"),
+        CheckConstraint(
+            "tariff_class ~ '^[A-Z0-9][A-Z0-9-]{0,15}$'", name="tariff_class_format"
+        ),
     )
 
 

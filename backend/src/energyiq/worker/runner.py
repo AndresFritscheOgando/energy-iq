@@ -12,10 +12,11 @@ worker that took over. This process never confirms an invoice.
 import logging
 import os
 import socket
+import sys
 import threading
 import time
 from collections.abc import Callable
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
 from datetime import datetime, timedelta
 from typing import cast
 from uuid import UUID, uuid4
@@ -26,15 +27,33 @@ from sqlalchemy.orm import Session, sessionmaker
 from energyiq.documents.models import ExtractionRunRow, SourceDocumentRow
 from energyiq.documents.pdf_text import NORMALIZATION_VERSION, has_native_text
 from energyiq.documents.storage import DocumentStore
+from energyiq.extraction.ollama import BAD_REQUEST, OllamaProvider
+from energyiq.extraction.provider import (
+    CANCELLED,
+    MODEL_MISSING,
+    PROVIDER_TIMEOUT,
+    PROVIDER_UNAVAILABLE,
+    ExtractionLimits,
+    ExtractionOutcome,
+    Provider,
+    run_extraction,
+)
 from energyiq.platform.clock import get_now
 from energyiq.platform.logging import ERROR_LOGGER
-from energyiq.platform.settings import Settings
+from energyiq.platform.settings import LEASE_MARGIN_SECONDS, Settings
 from energyiq.worker.sandbox import ChildLimits, ChildResult, run_pdf_child
 
 POLL_SECONDS = 2.0
 _log = logging.getLogger(ERROR_LOGGER)
 
 Parser = Callable[[bytes, ChildLimits], ChildResult]
+
+# A model outage fails the run (the owner can retry or enter the invoice by
+# hand). Any other extraction failure means the model answered badly: the page
+# text is still good, so the run succeeds and the document stays in review.
+OUTAGE_CODES = frozenset(
+    {PROVIDER_TIMEOUT, PROVIDER_UNAVAILABLE, MODEL_MISSING, BAD_REQUEST}
+)
 
 
 @dataclass(frozen=True)
@@ -55,6 +74,13 @@ def child_limits(settings: Settings) -> ChildLimits:
 
 def check_isolation(settings: Settings) -> None:
     """Refuse an unisolated worker outside development and test."""
+    if settings.worker_isolation == "container" and not sys.platform.startswith(
+        "linux"
+    ):
+        raise RuntimeError(
+            "ENERGYIQ_WORKER_ISOLATION=container needs a Linux host or container;"
+            " use none in dev or test"
+        )
     if settings.worker_isolation == "none" and settings.env not in ("dev", "test"):
         raise RuntimeError(
             "ENERGYIQ_WORKER_ISOLATION=none is only allowed when ENERGYIQ_ENV"
@@ -76,6 +102,7 @@ class Worker:
         owner: str | None = None,
         now: Callable[[], datetime] = get_now,
         parser: Parser = run_pdf_child,
+        provider: Provider | None = None,
     ) -> None:
         self.settings = settings
         self.factory = factory
@@ -83,6 +110,15 @@ class Worker:
         self.owner = owner or new_owner()
         self.now = now
         self.parser = parser
+        if provider is None and settings.extraction_enabled:
+            assert settings.ollama_model is not None  # checked by Settings
+            provider = OllamaProvider(
+                settings.ollama_base_url,
+                settings.ollama_model,
+                settings.ollama_timeout_seconds,
+            )
+        self.provider = provider
+        self._stopping = threading.Event()
 
     # claiming -------------------------------------------------------------
 
@@ -140,10 +176,62 @@ class Worker:
             data = self.store.read(claim.storage_key)
         except FileNotFoundError:
             return self._finish(claim, ChildResult(False, "source_missing"))
+        except OSError:
+            # A permission or disk error is final for this run; leaving it
+            # ``running`` would burn an attempt and end as attempts_exhausted.
+            return self._finish(claim, ChildResult(False, "source_unreadable"))
         result = self.parser(data, child_limits(self.settings))
-        return self._finish(claim, result)
+        outcome: ExtractionOutcome | None = None
+        if result.ok and self.provider is not None and has_native_text(result.pages):
+            if not self._renew(claim):
+                return False
+            outcome = run_extraction(
+                self.provider,
+                result.pages,
+                ExtractionLimits(
+                    max_pages=self.settings.pdf_max_pages,
+                    max_text_bytes=self.settings.pdf_max_text_bytes,
+                    max_output_bytes=self.settings.extraction_max_output_bytes,
+                    max_attempts=self.settings.extraction_max_attempts,
+                    # The lease was just renewed; stop starting attempts well
+                    # before it can lapse under us.
+                    deadline_seconds=max(
+                        1.0, self.settings.run_lease_seconds - LEASE_MARGIN_SECONDS / 2
+                    ),
+                ),
+                cancelled=self._stopping.is_set,
+            )
+        return self._finish(claim, result, outcome)
 
-    def _finish(self, claim: Claim, result: ChildResult) -> bool:
+    def _renew(self, claim: Claim) -> bool:
+        """Extend our own lease before the model call; ``False`` if it was lost."""
+        with self.factory() as session, session.begin():
+            now = self.now()
+            done = cast(
+                "CursorResult[tuple[()]]",
+                session.execute(
+                    update(ExtractionRunRow)
+                    .where(
+                        ExtractionRunRow.id == claim.run_id,
+                        ExtractionRunRow.state == "running",
+                        ExtractionRunRow.lease_owner == self.owner,
+                        ExtractionRunRow.lease_expires_at > now,
+                    )
+                    .values(
+                        lease_expires_at=now
+                        + timedelta(seconds=self.settings.run_lease_seconds)
+                    )
+                    .execution_options(synchronize_session=False)
+                ),
+            )
+            return done.rowcount == 1
+
+    def _finish(
+        self,
+        claim: Claim,
+        result: ChildResult,
+        extraction: ExtractionOutcome | None = None,
+    ) -> bool:
         with self.factory() as session, session.begin():
             values: dict[str, object] = {
                 "finished_at": self.now(),
@@ -151,16 +239,47 @@ class Worker:
                 "lease_expires_at": None,
             }
             if result.ok:
-                values.update(
-                    state="succeeded",
-                    error_code=None,
-                    output={
-                        "page_count": result.page_count,
-                        "normalization": NORMALIZATION_VERSION,
-                        "native_text": has_native_text(result.pages),
-                        "pages": [page.to_json() for page in result.pages],
-                    },
-                )
+                output: dict[str, object] = {
+                    "page_count": result.page_count,
+                    "normalization": NORMALIZATION_VERSION,
+                    "native_text": has_native_text(result.pages),
+                    "pages": [page.to_json() for page in result.pages],
+                }
+                state, code = "succeeded", None
+                release = False
+                if extraction is not None:
+                    meta = asdict(extraction.metadata)
+                    values.update(
+                        model=extraction.metadata.model,
+                        prompt_version=extraction.metadata.prompt_revision,
+                    )
+                    if extraction.metadata.error_code == CANCELLED:
+                        # A shutdown, not a failure: give the run back to the
+                        # queue and return the attempt it used.
+                        release = True
+                    elif extraction.proposal is not None:
+                        output["extraction"] = {
+                            "metadata": meta,
+                            "proposal": extraction.proposal.to_json(),
+                        }
+                    elif extraction.metadata.error_code in OUTAGE_CODES:
+                        # No pages kept: the run failed, the PDF is intact, and
+                        # a retry parses it again.
+                        state, code = "failed", extraction.metadata.error_code
+                        output = {"extraction": {"metadata": meta}}
+                    else:
+                        output["extraction"] = {"metadata": meta}
+                if release:
+                    values.update(
+                        state="queued",
+                        error_code=None,
+                        output=None,
+                        started_at=None,
+                        finished_at=None,
+                        attempts=ExtractionRunRow.attempts - 1,
+                    )
+                else:
+                    values.update(state=state, error_code=code, output=output)
             else:
                 values.update(state="failed", error_code=result.code, output=None)
             done = cast(
@@ -209,10 +328,22 @@ class Worker:
         self.process(claim)
         return True
 
+    def _shutdown_wait(self) -> float:
+        """Longest a thread may need to finish its run after a stop request."""
+        wait = self.settings.pdf_wall_seconds + 5
+        if self.provider is not None:
+            wait += (
+                self.settings.ollama_timeout_seconds
+                * self.settings.extraction_max_attempts
+            )
+        return float(wait)
+
     # serving --------------------------------------------------------------
 
     def serve(self, stop: threading.Event) -> None:
         """Poll until ``stop`` is set, with ``worker_concurrency`` threads."""
+
+        self._stopping = stop  # a shutdown cancels a run before its next model call
 
         def loop() -> None:
             while not stop.is_set():
@@ -233,4 +364,4 @@ class Worker:
         while not stop.is_set():
             time.sleep(0.2)
         for thread in threads:
-            thread.join(timeout=self.settings.pdf_wall_seconds + 5)
+            thread.join(timeout=self._shutdown_wait())

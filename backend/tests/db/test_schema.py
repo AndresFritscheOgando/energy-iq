@@ -30,7 +30,11 @@ TABLES = {
     "invoice_current_periods",
     "source_documents",
     "extraction_runs",
+    "tariff_schedules",
+    "tariff_bands",
 }
+# Read only for the app role: only the maintenance command writes them.
+READ_ONLY_TABLES = {"tariff_schedules", "tariff_bands"}
 
 CONSTRAINTS = {
     "pk_users",
@@ -109,6 +113,24 @@ CONSTRAINTS = {
     "fk_invoice_periods_invoice",
     "fk_invoice_periods_meter",
     "fk_invoice_periods_revision",
+    "ck_invoice_revisions_tariff_class_format",
+    "ck_tariff_bands_charge_type",
+    "ck_tariff_bands_nonnegative",
+    "ck_tariff_bands_range_order",
+    "ck_tariff_schedules_checked_order",
+    "ck_tariff_schedules_class_supported",
+    "ck_tariff_schedules_digest_format",
+    "ck_tariff_schedules_distributor",
+    "ck_tariff_schedules_effective_order",
+    "ck_tariff_schedules_rounding_mode",
+    "ck_tariff_schedules_rounding_places",
+    "ck_tariff_schedules_rounding_scope",
+    "fk_tariff_bands_schedule",
+    "pk_tariff_bands",
+    "pk_tariff_schedules",
+    "uq_tariff_bands_position",
+    "uq_tariff_schedules_resolution",
+    "uq_tariff_schedules_version",
 }
 
 INDEXES = {
@@ -163,6 +185,13 @@ INDEXES = {
     "ix_invoice_current_periods_meter_id",
     "ix_invoice_current_periods_current_revision_id",
     "ex_invoice_current_periods_meter_overlap",
+    "ex_tariff_schedules_overlap",
+    "ix_tariff_bands_schedule_id",
+    "pk_tariff_bands",
+    "pk_tariff_schedules",
+    "uq_tariff_bands_position",
+    "uq_tariff_schedules_resolution",
+    "uq_tariff_schedules_version",
 }
 
 PARTIAL_UNIQUE_INDEXES = {
@@ -331,7 +360,7 @@ def test_every_foreign_key_restricts_deletes_and_is_indexed(
             {"tables": list(TABLES)},
         ).all()
 
-    assert len(rows) == 24
+    assert len(rows) == 25
     for name, delete_rule, column, table, indexed in rows:
         assert delete_rule == "r", f"{name} is not ON DELETE RESTRICT"
         assert indexed, f"{table}.{column} ({name}) has no leading index"
@@ -377,7 +406,10 @@ def test_app_role_table_grants(migrator_engine: Engine) -> None:
             {"role": APP_ROLE},
         ).all()
 
-    expected = {(table, p) for table in TABLES for p in ("SELECT", "INSERT")}
+    expected = {
+        (table, p) for table in TABLES - READ_ONLY_TABLES for p in ("SELECT", "INSERT")
+    }
+    expected |= {(table, "SELECT") for table in READ_ONLY_TABLES}
     expected.add(("alembic_version", "SELECT"))
     expected.add(("idempotency_keys", "UPDATE"))
     assert set(map(tuple, rows)) == expected

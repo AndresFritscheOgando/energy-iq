@@ -1,9 +1,11 @@
 """Application settings read from ``ENERGYIQ_*`` environment variables."""
 
 import ipaddress
+import re
 from collections.abc import Mapping
 from pathlib import Path
 from typing import Annotated, Any, Literal
+from urllib.parse import urlsplit
 
 from pydantic import (
     Field,
@@ -53,6 +55,27 @@ class _Unset:
 
 
 _UNSET_ENV: Any = _Unset()
+
+
+_NUMERIC_HOST = re.compile(r"(0x[0-9a-f]+|[0-9]+)(\.(0x[0-9a-f]+|[0-9]+))*")
+
+
+def _is_local_host(host: str) -> bool:
+    """Loopback, a private or link local address, ``localhost``, or a bare
+    service name such as the Compose ``ollama`` (no dots, so no public DNS)."""
+    host = host.lower()
+    if host == "localhost":
+        return True
+    try:
+        address = ipaddress.ip_address(host)
+    except ValueError:
+        # "134744072" or "0x7f000001" are old spellings of an IP address that
+        # the parser above does not read; never treat them as a service name.
+        if _NUMERIC_HOST.fullmatch(host):
+            return False
+        return "." not in host
+    # Link local (169.254.x.x) holds cloud metadata endpoints: not a model host.
+    return (address.is_loopback or address.is_private) and not address.is_link_local
 
 
 def local_database_url(env: str, *, migrator: bool = False) -> str:
@@ -121,6 +144,17 @@ class Settings(BaseSettings):
     owner_max_active_docs: Annotated[int, Field(gt=0, le=10)] = 3
     run_lease_seconds: Annotated[int, Field(gt=0, le=600)] = 90
 
+    # Spec 0012/0004: optional local Ollama proposals. Off unless a person turns
+    # it on and names the model; there is deliberately no default model.
+    extraction_enabled: bool = False
+    ollama_base_url: str = "http://127.0.0.1:11434"
+    ollama_model: Annotated[str, Field(min_length=1, max_length=100)] | None = None
+    ollama_timeout_seconds: Annotated[int, Field(gt=0, le=300)] = 30
+    extraction_max_attempts: Annotated[int, Field(gt=0, le=3)] = 2
+    # Bill text goes only to a local model. A remote host needs this stated.
+    ollama_allow_remote: bool = False
+    extraction_max_output_bytes: Annotated[int, Field(gt=0, le=MIB)] = 16 * 1024
+
     @field_validator(
         "env",
         "database_url",
@@ -172,6 +206,49 @@ class Settings(BaseSettings):
             raise PydanticCustomError(
                 "lease_too_short",
                 "run_lease_seconds must exceed pdf_wall_seconds plus 30",
+            )
+        return self
+
+    @model_validator(mode="after")
+    def _extraction_config(self) -> "Settings":
+        """Ollama proposals need a named model, a plain local URL, and a lease
+        that outlasts every model call (the worker renews it once, after parsing)."""
+        if not self.extraction_enabled:
+            return self
+        if not self.ollama_model:
+            raise PydanticCustomError(
+                "missing", "ollama_model is required when extraction_enabled"
+            )
+        parts = urlsplit(self.ollama_base_url)
+        if (
+            parts.scheme not in {"http", "https"}
+            or not parts.hostname
+            or parts.username
+            or parts.password
+            or parts.path not in {"", "/"}
+            or parts.query
+            or parts.fragment
+        ):
+            raise PydanticCustomError(
+                "ollama_base_url",
+                "ollama_base_url must be a plain http(s) origin without credentials",
+            )
+        if not self.ollama_allow_remote and not _is_local_host(parts.hostname):
+            raise PydanticCustomError(
+                "ollama_base_url_not_local",
+                "ollama_base_url must name this machine, a private address, or a"
+                " single label service name; set ollama_allow_remote to override",
+            )
+        # Every attempt, the one digest lookup (5 s), and a retry pause of up to
+        # 1 s each, plus the usual margin.
+        attempts = self.extraction_max_attempts
+        needed = self.ollama_timeout_seconds * attempts + 5 + attempts
+        if self.run_lease_seconds <= needed + LEASE_MARGIN_SECONDS:
+            raise PydanticCustomError(
+                "lease_too_short_for_model",
+                "run_lease_seconds must exceed ollama_timeout_seconds times"
+                " extraction_max_attempts, plus 5 for the digest lookup, one"
+                " second per attempt for retry pauses, and 30",
             )
         return self
 

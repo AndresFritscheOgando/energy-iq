@@ -2,6 +2,7 @@
 
 import os
 import sys
+import time
 from pathlib import Path
 from typing import Any
 from uuid import uuid4
@@ -83,8 +84,9 @@ def test_prod_must_name_the_document_root(
 
 
 def test_unisolated_workers_run_only_in_development_and_test(
-    prod_secrets: dict[str, str],
+    prod_secrets: dict[str, str], monkeypatch: pytest.MonkeyPatch
 ) -> None:
+    monkeypatch.setattr(sys, "platform", "linux")
     check_isolation(Settings(env="dev"))
     check_isolation(Settings(env="test", worker_isolation="none"))
     check_isolation(Settings(env="prod", worker_isolation="container"))
@@ -232,3 +234,140 @@ def test_a_discarded_temp_file_is_gone_and_foreign_names_are_ignored(
     assert not temp.exists()
     assert list(store.keys()) == []
     assert os.listdir(tmp_path / "tmp") == []
+
+
+PARENT_SCRIPT = """
+import subprocess, sys
+
+if sys.argv[1] == "harden":
+    from energyiq.worker.sandbox import make_parent_non_dumpable
+
+    assert make_parent_non_dumpable()
+child = subprocess.run(
+    [sys.executable, "-I", sys.argv[2]], capture_output=True, text=True, timeout=30
+)
+print(child.stdout.strip())
+"""
+
+CHILD_SCRIPT = """
+import os
+
+try:
+    data = open(f"/proc/{os.getppid()}/environ", "rb").read()
+except PermissionError:
+    print("DENIED")
+else:
+    print("READ" if b"SECRET_PROBE=hunter2" in data else "EMPTY")
+"""
+
+
+def _probe(mode: str, tmp_path: Path) -> str:
+    import subprocess
+
+    parent = tmp_path / "parent.py"
+    child = tmp_path / "child.py"
+    parent.write_text(PARENT_SCRIPT, encoding="utf-8")
+    child.write_text(CHILD_SCRIPT, encoding="utf-8")
+    result = subprocess.run(
+        [sys.executable, str(parent), mode, str(child)],
+        capture_output=True,
+        text=True,
+        env={
+            **os.environ,
+            "PYTHONPATH": str(Path(__file__).parents[1] / "src"),
+            "SECRET_PROBE": "hunter2",
+        },
+        check=False,
+        timeout=60,
+    )
+    assert result.returncode == 0, result.stderr
+    return result.stdout.strip()
+
+
+def test_the_probe_scripts_are_valid_python() -> None:
+    """Runs everywhere, so a broken probe cannot hide behind the Linux skip."""
+    compile(PARENT_SCRIPT, "parent", "exec")
+    compile(CHILD_SCRIPT, "child", "exec")
+
+
+LINUX_NON_ROOT = pytest.mark.skipif(
+    not sys.platform.startswith("linux") or getattr(os, "geteuid", lambda: 0)() == 0,
+    reason="needs a non root Linux user (root may hold CAP_SYS_PTRACE)",
+)
+
+
+@LINUX_NON_ROOT
+def test_a_same_uid_child_reads_the_parent_environ_without_the_flag(
+    tmp_path: Path,
+) -> None:
+    """Control run: proves the probe can see the secret when nothing protects it."""
+    assert _probe("plain", tmp_path) == "READ"
+
+
+@LINUX_NON_ROOT
+def test_a_non_dumpable_parent_hides_its_environ_from_a_same_uid_child(
+    tmp_path: Path,
+) -> None:
+    assert _probe("harden", tmp_path) == "DENIED"
+
+
+@pytest.mark.parametrize(
+    ("output", "code"),
+    [
+        ('{"ok": false, "code": "leaked secret text"}', "pdf_parse_failed"),
+        ('{"ok": false, "code": "pdf_encrypted"}', "pdf_encrypted"),
+        ('{"ok": true, "page_count": 4, "pages": []}', "pdf_parse_failed"),
+        ('{"ok": true, "page_count": -1, "pages": []}', "pdf_parse_failed"),
+    ],
+)
+def test_the_parent_trusts_only_known_child_codes_and_a_bounded_page_count(
+    output: str, code: str
+) -> None:
+    source = f"import sys; sys.stdout.write({output!r})"
+
+    result = run_pdf_child(b"x", LIMITS, command=_python(source))
+
+    assert (result.ok, result.code) == (False, code)
+
+
+def test_the_worker_refuses_to_start_when_it_cannot_become_non_dumpable(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    from energyiq.worker import __main__ as entry
+
+    monkeypatch.setenv("ENERGYIQ_ENV", "dev")
+    monkeypatch.setenv("ENERGYIQ_WORKER_ISOLATION", "container")
+    monkeypatch.setattr(entry.sys, "platform", "linux")
+    monkeypatch.setattr(entry, "make_parent_non_dumpable", lambda: False)
+
+    assert entry.main() == entry.EXIT_CONFIG
+    assert "non dumpable" in capsys.readouterr().err
+
+
+def test_container_mode_is_refused_on_a_non_linux_host(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(sys, "platform", "win32")
+    with pytest.raises(RuntimeError, match="needs a Linux host"):
+        check_isolation(Settings(env="dev", worker_isolation="container"))
+
+
+@LINUX_ONLY
+def test_a_grandchild_left_behind_by_an_exited_child_is_killed(tmp_path: Path) -> None:
+    marker = tmp_path / "grandchild.pid"
+    source = (
+        "import os, subprocess, sys\n"
+        "p = subprocess.Popen(['sleep', '60'], stdout=subprocess.DEVNULL)\n"
+        f"open({str(marker)!r}, 'w').write(str(p.pid))\n"
+        'sys.stdout.write(\'{"ok": false, "code": "pdf_malformed"}\')\n'
+    )
+
+    result = run_pdf_child(b"x", LIMITS, command=_python(source))
+
+    assert result.code == "pdf_malformed"
+    pid = int(marker.read_text())
+    time.sleep(0.2)
+    assert (
+        not os.path.exists(f"/proc/{pid}")
+        or "Z" in Path(f"/proc/{pid}/stat").read_text().split(")")[-1].split()[0]
+    )

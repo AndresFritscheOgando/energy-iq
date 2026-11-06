@@ -11,8 +11,10 @@ from energyiq.properties.models import Distributor
 
 Kwh = Annotated[str, StringConstraints(pattern=r"^[0-9]{1,12}(\.[0-9]{1,6})?$")]
 Money = Annotated[str, StringConstraints(pattern=r"^[0-9]{1,14}(\.[0-9]{1,2})?$")]
+TariffClass = Annotated[str, StringConstraints(pattern=r"^[A-Z0-9][A-Z0-9-]{0,15}$")]
 FIELDS = (
     "distributor",
+    "tariff_class",
     "period_start",
     "period_end",
     "billed_kwh",
@@ -27,6 +29,7 @@ class DraftFields(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
     distributor: Distributor | None = None
+    tariff_class: TariffClass | None = None
     period_start: date | None = None
     period_end: date | None = None
     billed_kwh: Kwh | None = None
@@ -49,13 +52,27 @@ class DraftFields(BaseModel):
 
 
 class DraftCreate(DraftFields):
-    field_origins: dict[str, Literal["manual"]] = {}
+    """A new draft. ``document`` origin marks a value kept as the model proposed it.
+
+    It needs ``source_document_id``, and the route checks that the value equals
+    the retained proposal. A value the owner typed or changed is ``manual``.
+    """
+
+    source_document_id: UUID | None = None
+    field_origins: dict[str, Literal["manual", "document"]] = {}
 
     @model_validator(mode="after")
     def origins_match(self) -> "DraftCreate":
         if any(name not in FIELDS for name in self.field_origins):
             raise PydanticCustomError(
                 "invalid_origin", "Field origin names must match invoice fields."
+            )
+        if (
+            self.source_document_id is None
+            and "document" in self.field_origins.values()
+        ):
+            raise PydanticCustomError(
+                "invalid_origin", "A document origin needs a source document."
             )
         return self
 
@@ -96,6 +113,7 @@ class RevisionOut(BaseModel):
     created_at: str
     confirmed_at: str | None
     distributor: Distributor | None
+    tariff_class: str | None
     period_start: date | None
     period_end: date | None
     billed_kwh: str | None
@@ -104,6 +122,7 @@ class RevisionOut(BaseModel):
     issue_date: date | None
     due_date: date | None
     field_origins: dict[str, str]
+    source_document_id: UUID | None
     previous_revision_id: UUID | None
     changed_fields: list[str]
     old_values: dict[str, str | None]

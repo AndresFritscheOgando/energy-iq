@@ -40,7 +40,14 @@ class AuditEventRow(Base):
 
 
 EntityType = Literal[
-    "user", "property", "meter", "reading", "meter_event", "invoice", "document"
+    "user",
+    "property",
+    "meter",
+    "reading",
+    "meter_event",
+    "invoice",
+    "document",
+    "tariff_schedule",
 ]
 
 AuditAction = Literal[
@@ -65,6 +72,7 @@ AuditAction = Literal[
     "document.upload",
     "document.retry",
     "document.delete",
+    "tariff.publish",
 ]
 
 

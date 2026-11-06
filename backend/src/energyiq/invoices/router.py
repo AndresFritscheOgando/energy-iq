@@ -3,7 +3,7 @@
 from collections.abc import Mapping, Sequence
 from datetime import date, timedelta
 from decimal import Decimal
-from typing import Literal, cast
+from typing import Any, Literal, cast
 from uuid import UUID, uuid4
 
 from fastapi import APIRouter, Depends, Request
@@ -12,6 +12,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 from starlette.responses import Response
 
+from energyiq.documents import repository as documents
 from energyiq.identity.dependencies import CurrentUserDep
 from energyiq.invoices import repository
 from energyiq.invoices.models import (
@@ -81,6 +82,7 @@ def _revision_out(row: InvoiceRevisionRow) -> RevisionOut:
         created_at=format_instant(row.created_at),
         confirmed_at=format_instant(row.confirmed_at) if row.confirmed_at else None,
         distributor=Distributor(row.distributor) if row.distributor else None,
+        tariff_class=row.tariff_class,
         period_start=row.period_start,
         period_end=row.period_end,
         billed_kwh=f"{row.billed_kwh:.6f}" if row.billed_kwh is not None else None,
@@ -91,6 +93,7 @@ def _revision_out(row: InvoiceRevisionRow) -> RevisionOut:
         issue_date=row.issue_date,
         due_date=row.due_date,
         field_origins=row.field_origins,
+        source_document_id=row.source_document_id,
         previous_revision_id=row.previous_revision_id,
         changed_fields=row.changed_fields,
         old_values=row.old_values,
@@ -133,6 +136,60 @@ def _origins(values: dict[str, object], supplied: Mapping[str, str]) -> dict[str
     }
 
 
+def _same_value(name: str, value: object, proposed: object) -> bool:
+    """Does a draft value equal the proposed one, compared as typed values?"""
+    if value is None or not isinstance(proposed, str):
+        return False
+    try:
+        if name in {"billed_kwh", "total_dop", "energy_charge_dop"}:
+            return isinstance(value, Decimal) and value == Decimal(proposed)
+        if name in {"period_start", "period_end", "issue_date", "due_date"}:
+            return value == date.fromisoformat(proposed)
+    except (ValueError, ArithmeticError):
+        return False
+    return value == proposed
+
+
+def _check_source(
+    session: Session,
+    owner_id: UUID,
+    meter_id: UUID,
+    body: DraftCreate,
+    values: dict[str, object],
+) -> None:
+    """A linked document is the owner's, on this meter, and not deleted.
+
+    A foreign, wrong meter, or deleted document answers the same 404 as an
+    unknown ID. A ``document`` origin must equal the retained proposal, so the
+    label cannot claim a source the document does not hold.
+    """
+    if body.source_document_id is None:
+        return
+    document = documents.get_document(session, owner_id, body.source_document_id)
+    if document is None or document.meter_id != meter_id or document.deleted_at:
+        raise _missing()
+    claimed = [
+        name for name, origin in body.field_origins.items() if origin == "document"
+    ]
+    if not claimed:
+        return
+    found = documents.latest_extraction(session, document.id)
+    fields: dict[str, Any] = found[1].get("fields", {}) if found is not None else {}
+    wrong: list[str] = []
+    for name in sorted(claimed):
+        item = fields.get(name)
+        if not (
+            isinstance(item, dict)
+            and cast("dict[str, Any]", item).get("state") in {"explicit", "inferred"}
+            and _same_value(
+                name, values.get(name), cast("dict[str, Any]", item).get("value")
+            )
+        ):
+            wrong.append(name)
+    if wrong:
+        raise ProblemError(422, "origin_mismatch", {"fields": wrong})
+
+
 @router.post(
     "/meters/{meter_id}/invoices",
     status_code=201,
@@ -151,6 +208,8 @@ def create_invoice(
 ) -> Response:
     def write() -> InvoiceOut:
         _meter(session, user.id, meter_id, active=True)
+        values = _draft_values(body)
+        _check_source(session, user.id, meter_id, body, values)
         row = InvoiceRow(
             id=uuid4(),
             meter_id=meter_id,
@@ -160,7 +219,6 @@ def create_invoice(
         )
         session.add(row)
         session.flush()
-        values = _draft_values(body)
         revision = InvoiceRevisionRow(
             id=uuid4(),
             invoice_id=row.id,
@@ -169,7 +227,7 @@ def create_invoice(
             actor_id=user.id,
             created_at=now,
             confirmed_at=None,
-            source_document_id=None,
+            source_document_id=body.source_document_id,
             field_origins=_origins(values, body.field_origins),
             previous_revision_id=None,
             changed_fields=sorted(name for name in FIELDS if values[name] is not None),

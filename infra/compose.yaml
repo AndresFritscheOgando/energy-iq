@@ -42,14 +42,22 @@ services:
     depends_on:
       db:
         condition: service_healthy
-    env_file:
-      - path: .env
-        required: true
+    # No env_file: that file holds the PostgreSQL superuser and migrator
+    # passwords. The worker gets only the app role password, interpolated below.
     environment:
       ENERGYIQ_ENV: dev
       ENERGYIQ_WORKER_ISOLATION: container
       ENERGYIQ_DOCUMENT_ROOT: /var/lib/energyiq/documents
       ENERGYIQ_DATABASE_URL: postgresql+psycopg://energyiq_app:${ENERGYIQ_APP_PASSWORD}@db:5432/energyiq_dev
+      # Optional local model proposals (spec 0012/0004). Off by default and not
+      # tested against a real model yet. To try it, run Ollama yourself, join it to
+      # the `internal` network only (never give this worker a route to the
+      # internet), pull a model, then set these and raise the lease above
+      # ollama timeout times attempts, plus 35 and one per attempt:
+      #   ENERGYIQ_EXTRACTION_ENABLED: "true"
+      #   ENERGYIQ_OLLAMA_BASE_URL: http://ollama:11434
+      #   ENERGYIQ_OLLAMA_MODEL: <your model tag>
+      #   ENERGYIQ_RUN_LEASE_SECONDS: "150"
     # On Linux set ENERGYIQ_WORKER_UID to your own uid so the worker can read
     # files the API wrote. Docker Desktop (Windows, macOS) needs no change.
     user: "${ENERGYIQ_WORKER_UID:-10001}:${ENERGYIQ_WORKER_GID:-10001}"

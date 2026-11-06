@@ -25,6 +25,7 @@ import type {
 
 import type {
   DocumentOut,
+  PageExtractionOut,
   Problem
 } from '../model';
 
@@ -213,6 +214,111 @@ export function useGetDocument<TData = Awaited<ReturnType<typeof getDocument>>, 
  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
 
   const queryOptions = getGetDocumentQueryOptions(documentId,options)
+
+  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+export const getListExtractionsUrl = (documentId: string,) => {
+
+
+
+
+  return `/api/v1/documents/${documentId}/extractions`
+}
+
+/**
+ * Proposals of this document, newest run first.
+ *
+ * A document holds at most ``doc_max_runs`` runs, so one page is the whole
+ * list and ``next_cursor`` is always null. A run that failed, or whose model
+ * output was unusable, has no proposal and is not listed.
+ * @summary List Extractions
+ */
+export const listExtractions = async (documentId: string, options?: Parameters<typeof apiFetch>[1]): Promise<PageExtractionOut> => {
+
+  return apiFetch<PageExtractionOut>(getListExtractionsUrl(documentId),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListExtractionsQueryKey = (documentId: string,) => {
+    return [
+    `/api/v1/documents/${documentId}/extractions`
+    ] as const;
+    }
+
+
+export const getListExtractionsQueryOptions = <TData = Awaited<ReturnType<typeof listExtractions>>, TError = ErrorType<Problem>>(documentId: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listExtractions>>, TError, TData>>, request?: SecondParameter<typeof apiFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListExtractionsQueryKey(documentId);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listExtractions>>> = ({ signal }) => listExtractions(documentId, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: documentId !== null && documentId !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listExtractions>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
+}
+
+export type ListExtractionsQueryResult = NonNullable<Awaited<ReturnType<typeof listExtractions>>>
+export type ListExtractionsQueryError = ErrorType<Problem>
+
+
+export function useListExtractions<TData = Awaited<ReturnType<typeof listExtractions>>, TError = ErrorType<Problem>>(
+ documentId: string, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof listExtractions>>, TError, TData>> & Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof listExtractions>>,
+          TError,
+          Awaited<ReturnType<typeof listExtractions>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof apiFetch>}
+ , queryClient?: QueryClient
+  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useListExtractions<TData = Awaited<ReturnType<typeof listExtractions>>, TError = ErrorType<Problem>>(
+ documentId: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listExtractions>>, TError, TData>> & Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof listExtractions>>,
+          TError,
+          Awaited<ReturnType<typeof listExtractions>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof apiFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useListExtractions<TData = Awaited<ReturnType<typeof listExtractions>>, TError = ErrorType<Problem>>(
+ documentId: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listExtractions>>, TError, TData>>, request?: SecondParameter<typeof apiFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
+ * @summary List Extractions
+ */
+
+export function useListExtractions<TData = Awaited<ReturnType<typeof listExtractions>>, TError = ErrorType<Problem>>(
+ documentId: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listExtractions>>, TError, TData>>, request?: SecondParameter<typeof apiFetch>}
+ , queryClient?: QueryClient
+ ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+
+  const queryOptions = getListExtractionsQueryOptions(documentId,options)
 
   const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
 

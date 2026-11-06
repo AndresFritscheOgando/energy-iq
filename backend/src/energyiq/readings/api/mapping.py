@@ -110,7 +110,7 @@ def _optional_decimal(value: Decimal | None) -> str | None:
     return None if value is None else format_decimal(value)
 
 
-def _gap_out(gap: ConsumptionGap) -> GapOut:
+def gap_out(gap: ConsumptionGap) -> GapOut:
     return GapOut(
         start=format_utc(gap.start),
         end=format_utc(gap.end),
@@ -163,7 +163,7 @@ def to_response(
         uncovered=format_duration(summary.uncovered),
         coverage_ratio=format_decimal(summary.coverage_ratio),
         average_kwh_per_day=_optional_decimal(summary.average_kwh_per_day),
-        gaps=[_gap_out(gap) for gap in summary.gaps],
+        gaps=[gap_out(gap) for gap in summary.gaps],
         intervals=[
             _interval_out(item, summary.window_start, summary.window_end)
             for item in intervals

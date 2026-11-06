@@ -1,5 +1,7 @@
 # AGENTS.md — EnergyIQ RD Architecture and Implementation Instructions
 
+# Read the /docs folder before doing anything
+
 You are the senior software architect and Python / Applied AI Engineer responsible for implementing this repository. Deliver working, tested features according to the product requirements, architecture, and implementation roadmap. Read README and the relevant docs before changing code.
 
 ## Role and responsibility

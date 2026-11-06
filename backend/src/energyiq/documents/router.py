@@ -9,7 +9,7 @@ response never names a storage key. Writes need the CSRF header and accept an
 import hashlib
 import re
 from datetime import datetime
-from typing import Annotated
+from typing import Annotated, Any
 from uuid import UUID, uuid4
 
 from fastapi import APIRouter, Depends, Request
@@ -20,7 +20,16 @@ from starlette.responses import FileResponse, Response
 
 from energyiq.documents import repository
 from energyiq.documents.models import ExtractionRunRow, SourceDocumentRow
-from energyiq.documents.schemas import DocumentOut, RunOut
+from energyiq.documents.schemas import (
+    CandidateOut,
+    ProposalConflictOut,
+    ContradictionOut,
+    DocumentOut,
+    ExtractionOut,
+    ProposalOut,
+    ProposedFieldOut,
+    RunOut,
+)
 from energyiq.documents.storage import DocumentStore, LocalDocumentStore
 from energyiq.documents.upload import receive_pdf
 from energyiq.identity.dependencies import CurrentUser, CurrentUserDep
@@ -36,6 +45,7 @@ from energyiq.platform.http.problems import (
     request_id_from,
 )
 from energyiq.platform.idempotency import IdempotencyKey, execute_idempotent, idempotent
+from energyiq.platform.pagination import Page
 from energyiq.properties import repository as properties
 
 UPLOAD_PATH = re.compile(r"/api/v1/meters/[^/]+/documents")
@@ -158,6 +168,9 @@ async def upload_document(
     key: IdempotencyKey,
 ) -> Response:
     def check_meter() -> None:
+        # Only ownership is answered before the body streams. The limit and
+        # inactive meter checks stay inside ``write``: answering them earlier
+        # would turn an idempotent replay into a fresh 429 or 409.
         with session.begin():
             if properties.get_meter(session, user.id, meter_id) is None:
                 raise _missing()
@@ -216,10 +229,19 @@ async def upload_document(
             digest=_upload_digest(meter_id, received.sha256),
         )
 
+    def row_exists() -> bool:
+        try:
+            with session.begin():
+                return repository.storage_key_exists(session, storage_key)
+        except Exception:  # noqa: BLE001 - unsure means keep the file
+            return True
+
     try:
         return await run_in_threadpool(run)
     except BaseException:
-        if stored:
+        # A cancelled request may have committed before it noticed. Delete the
+        # file only when no row names it; otherwise leave it to reconcile.
+        if stored and not await run_in_threadpool(row_exists):
             store.delete(storage_key)
         raise
     finally:
@@ -235,6 +257,80 @@ def get_document(
         return _document_out(document, repository.latest_run(session, document.id))
 
 
+def _proposal_out(proposal: dict[str, Any]) -> ProposalOut:
+    """Map the stored, already validated proposal; spans and offsets stay private."""
+    return ProposalOut(
+        fields=[
+            ProposedFieldOut(
+                name=name,
+                state=item["state"],
+                value=item["value"],
+                quote=item["quote"],
+                page_number=item["page_number"],
+                uncertainty=item["uncertainty"],
+                issues=item["issues"],
+                evidence_verified=item["evidence_verified"],
+            )
+            for name, item in proposal["fields"].items()
+        ],
+        contradictions=[
+            ContradictionOut(
+                field=entry["field"],
+                candidates=[
+                    CandidateOut(
+                        value=c["value"],
+                        raw_value=c["raw_value"],
+                        quote=c["quote"],
+                        page_number=c["page_number"],
+                        evidence_verified=c["evidence_verified"],
+                        issues=c["issues"],
+                    )
+                    for c in entry["candidates"]
+                ],
+            )
+            for entry in proposal["contradictions"]
+        ],
+        conflicts=[ProposalConflictOut(**entry) for entry in proposal["conflicts"]],
+        requires_review=True,
+    )
+
+
+@router.get(
+    "/documents/{document_id}/extractions",
+    response_model=Page[ExtractionOut],
+    responses=_READ,
+)
+def list_extractions(
+    document_id: UUID, user: CurrentUserDep, session: DbSession
+) -> Page[ExtractionOut]:
+    """Proposals of this document, newest run first.
+
+    A document holds at most ``doc_max_runs`` runs, so one page is the whole
+    list and ``next_cursor`` is always null. A run that failed, or whose model
+    output was unusable, has no proposal and is not listed.
+    """
+    with session.begin():
+        document = _owned(session, user, document_id)
+        if document.deleted_at is not None:
+            raise _missing()
+        items = [
+            ExtractionOut(
+                run_id=run.id,
+                run_number=run.run_number,
+                model=run.model,
+                prompt_version=run.prompt_version,
+                finished_at=_instant(run.finished_at),
+                proposal=_proposal_out(proposal),
+            )
+            for run, proposal in repository.extractions(session, document.id)
+        ]
+    return Page[ExtractionOut](items=items, next_cursor=None)
+
+
+def _lease_lapsed(run: ExtractionRunRow, now: datetime) -> bool:
+    return run.lease_expires_at is None or run.lease_expires_at <= now
+
+
 @router.get(
     "/documents/{document_id}/source",
     response_class=FileResponse,
@@ -245,20 +341,22 @@ def get_document(
 )
 def download_source(
     document_id: UUID, user: CurrentUserDep, session: DbSession, store: StoreDep
-) -> FileResponse:
+) -> Response:
     with session.begin():
         document = _owned(session, user, document_id)
         if document.deleted_at is not None:
             raise _missing()
         storage_key = document.storage_key
-    if not store.exists(storage_key):
-        raise _missing()
-    return FileResponse(
-        store.open_path(storage_key),
+    try:
+        # One read, not exists then open: a purge between the two would be a 500.
+        data = store.read(storage_key)
+    except FileNotFoundError:
+        raise _missing() from None
+    return Response(
+        data,
         media_type="application/pdf",
-        filename=f"bill-{document_id}.pdf",
-        content_disposition_type="attachment",
         headers={
+            "Content-Disposition": f'attachment; filename="bill-{document_id}.pdf"',
             "Cache-Control": "private, no-store",
             "X-Content-Type-Options": "nosniff",
             "Content-Security-Policy": "sandbox",
@@ -290,6 +388,9 @@ def retry_document(
             raise ProblemError(409, "document_deleted")
         runs = repository.lock_runs(session, document.id)
         newest = runs[0] if runs else None
+        meter = properties.get_meter(session, user.id, document.meter_id)
+        if meter is None or not meter.active:
+            raise ProblemError(409, "meter_inactive")
         if newest is not None and newest.state in ("queued", "running"):
             raise ProblemError(409, "run_active")
         if newest is not None and newest.state != "failed":
@@ -336,15 +437,22 @@ def delete_document(
         if document.deleted_at is not None:
             storage_key = document.storage_key if document.purged_at is None else None
             return _document_out(document, newest)
-        if any(run.state == "running" for run in runs):
+        # A running run whose lease lapsed has no live worker; it must not hold
+        # the owner's bill hostage. The compare and set finish keeps a late
+        # worker from overwriting what we write here.
+        if any(run.state == "running" and not _lease_lapsed(run, now) for run in runs):
             raise ProblemError(409, "run_active")
         if repository.is_source_of_revision(session, document.id):
             raise ProblemError(409, "document_in_use")
         document.deleted_at = now
         for run in runs:
             run.output = None
-            if run.state == "queued":
+            if run.state == "queued" or (
+                run.state == "running" and _lease_lapsed(run, now)
+            ):
                 run.state = "failed"
+                run.lease_owner = None
+                run.lease_expires_at = None
                 run.error_code = "document_deleted"
                 run.finished_at = now
         session.flush()

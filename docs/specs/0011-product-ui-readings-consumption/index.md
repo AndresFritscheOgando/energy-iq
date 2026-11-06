@@ -1,7 +1,7 @@
 # 0011. Product UI for properties, readings, and consumption
 
 **Date**: 2026-11-05
-**Status**: In Progress
+**Status**: Accepted
 
 ## Summary
 
