@@ -24,3 +24,4 @@ skills.lock
 .idea/
 skills-lock.json
 test-preferences.json
+.local/

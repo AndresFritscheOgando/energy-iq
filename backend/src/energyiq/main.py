@@ -23,8 +23,12 @@ from fastapi.routing import APIRoute
 from starlette.middleware.cors import CORSMiddleware
 
 from energyiq import __version__
+from energyiq.documents.router import UPLOAD_PATH
+from energyiq.documents.router import router as documents_router
+from energyiq.documents.upload import MULTIPART_OVERHEAD_BYTES
 from energyiq.identity.passwords import PasswordService
 from energyiq.identity.router import router as identity_router
+from energyiq.invoices.router import router as invoices_router
 from energyiq.platform.db import (
     build_engine,
     install_database_handlers,
@@ -39,6 +43,7 @@ from energyiq.platform.http.middleware import (
     ForwardedClientMiddleware,
     NoStoreMiddleware,
     RequestContextMiddleware,
+    RouteLimit,
 )
 from energyiq.platform.http.problems import (
     PROBLEM_MEDIA_TYPE,
@@ -139,10 +144,23 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(properties_router)
     app.include_router(readings_router)
     app.include_router(stored_router)
+    app.include_router(invoices_router)
+    app.include_router(documents_router)
     _install_openapi(app)
 
     # add_middleware puts each new layer outside the previous ones.
-    app.add_middleware(BodySizeLimitMiddleware, max_bytes=settings.max_body_bytes)
+    app.add_middleware(
+        BodySizeLimitMiddleware,
+        max_bytes=settings.max_body_bytes,
+        route_limits=[
+            RouteLimit(
+                method="POST",
+                pattern=UPLOAD_PATH,
+                max_bytes=settings.upload_max_bytes + MULTIPART_OVERHEAD_BYTES,
+                code="upload_too_large",
+            )
+        ],
+    )
     if settings.cors_origins:
         app.add_middleware(
             CORSMiddleware,

@@ -165,7 +165,156 @@ def _event(owner: Owner) -> str:
     )
 
 
+def _invoice_draft(owner: Owner) -> tuple[str, str]:
+    response = owner.client.post(
+        f"{V1}/meters/{owner.meter_id}/invoices",
+        json={
+            "distributor": "EDESUR",
+            "period_start": "2026-01-01",
+            "period_end": "2026-01-31",
+            "billed_kwh": "25",
+            "total_dop": "100",
+        },
+    )
+    assert response.status_code == 201, response.text
+    data = response.json()
+    return data["id"], data["revisions"][0]["id"]
+
+
+def _confirmed_invoice(owner: Owner) -> tuple[str, str]:
+    invoice_id, draft_id = _invoice_draft(owner)
+    response = owner.client.post(
+        f"{V1}/invoices/{invoice_id}/confirm",
+        json={"draft_revision_id": draft_id, "expected_current_revision_id": None},
+    )
+    assert response.status_code == 200, response.text
+    return invoice_id, draft_id
+
+
+def _confirm_prepared(owner: Owner) -> tuple[str, dict[str, Any]]:
+    invoice_id, draft_id = _invoice_draft(owner)
+    return f"{V1}/invoices/{invoice_id}/confirm", {
+        "draft_revision_id": draft_id,
+        "expected_current_revision_id": None,
+    }
+
+
+def _correct_prepared(owner: Owner) -> tuple[str, dict[str, Any]]:
+    invoice_id, current_id = _confirmed_invoice(owner)
+    return f"{V1}/invoices/{invoice_id}/revisions", {
+        "base_revision_id": current_id,
+        "expected_current_revision_id": current_id,
+        "total_dop": "101",
+    }
+
+
+@pytest.mark.db_commit
+def test_concurrent_invoice_confirmations_cannot_overlap(
+    committed_db: Engine, owner: Owner
+) -> None:
+    first = _invoice_draft(owner)
+    second = _invoice_draft(owner)
+
+    def confirm(pair: tuple[str, str]) -> Callable[[], Reply]:
+        invoice_id, draft_id = pair
+        return lambda: _reply(
+            owner.twin().post(
+                f"{V1}/invoices/{invoice_id}/confirm",
+                json={
+                    "draft_revision_id": draft_id,
+                    "expected_current_revision_id": None,
+                },
+            )
+        )
+
+    replies = overlapped(
+        committed_db, _hold_meter(owner.meter_id), [confirm(first), confirm(second)]
+    )
+    assert sorted(reply.status for reply in replies) == [200, 409]
+    assert _count(committed_db, "SELECT count(*) FROM invoice_current_periods") == 1
+    assert (
+        _count(
+            committed_db,
+            "SELECT count(*) FROM invoice_revisions WHERE status = 'confirmed'",
+        )
+        == 1
+    )
+
+
+@pytest.mark.db_commit
+def test_concurrent_corrections_create_one_draft(
+    committed_db: Engine, owner: Owner
+) -> None:
+    invoice_id, current_id = _confirmed_invoice(owner)
+
+    def correct() -> Reply:
+        return _reply(
+            owner.twin().post(
+                f"{V1}/invoices/{invoice_id}/revisions",
+                json={
+                    "base_revision_id": current_id,
+                    "expected_current_revision_id": current_id,
+                    "total_dop": "101",
+                },
+            )
+        )
+
+    replies = overlapped(committed_db, _hold_meter(owner.meter_id), [correct, correct])
+    assert sorted(reply.status for reply in replies) == [201, 409]
+    assert (
+        _count(
+            committed_db,
+            "SELECT count(*) FROM invoice_revisions WHERE status = 'draft'",
+        )
+        == 1
+    )
+
+
+@pytest.mark.db_commit
+def test_concurrent_edits_of_one_draft_create_one_revision(
+    committed_db: Engine, owner: Owner
+) -> None:
+    invoice_id, draft_id = _invoice_draft(owner)
+
+    def edit() -> Reply:
+        return _reply(
+            owner.twin().post(
+                f"{V1}/invoices/{invoice_id}/revisions",
+                json={
+                    "base_revision_id": draft_id,
+                    "expected_current_revision_id": None,
+                    "total_dop": "101",
+                },
+            )
+        )
+
+    replies = overlapped(committed_db, _hold_meter(owner.meter_id), [edit, edit])
+    assert sorted(reply.status for reply in replies) == [201, 409]
+    assert (
+        _count(
+            committed_db,
+            "SELECT count(*) FROM invoice_revisions WHERE revision_number = 2",
+        )
+        == 1
+    )
+
+
 IDEMPOTENT: dict[tuple[str, str], Replayable] = {
+    ("POST", f"{V1}/meters/{{meter_id}}/invoices"): Replayable(
+        lambda o: (f"{V1}/meters/{o.meter_id}/invoices", {"total_dop": "1"}),
+        "invoice.create",
+        "invoices",
+    ),
+    ("POST", f"{V1}/invoices/{{invoice_id}}/confirm"): Replayable(
+        _confirm_prepared,
+        "invoice.confirm",
+        "invoice_current_periods",
+    ),
+    ("POST", f"{V1}/invoices/{{invoice_id}}/revisions"): Replayable(
+        _correct_prepared,
+        "invoice.correct",
+        "invoice_revisions",
+    ),
     ("POST", f"{V1}/properties"): Replayable(
         lambda o: (f"{V1}/properties", {"nickname": "Replayed"}),
         "property.create",
@@ -213,6 +362,15 @@ IDEMPOTENT: dict[tuple[str, str], Replayable] = {
 }
 
 
+# Spec 0012/0002 routes take multipart or DELETE requests, which this JSON POST
+# matrix cannot send; ``tests/db/test_documents.py`` replays each of them.
+REPLAYED_ELSEWHERE = {
+    ("POST", f"{V1}/meters/{{meter_id}}/documents"),
+    ("POST", f"{V1}/documents/{{document_id}}/retry"),
+    ("DELETE", f"{V1}/documents/{{document_id}}"),
+}
+
+
 def test_every_idempotent_route_is_in_the_replay_matrix() -> None:
     served = {
         route.key
@@ -220,7 +378,8 @@ def test_every_idempotent_route_is_in_the_replay_matrix() -> None:
         if "idempotent" in route.calls
     }
 
-    assert served == set(IDEMPOTENT)
+    assert served - REPLAYED_ELSEWHERE == set(IDEMPOTENT)
+    assert REPLAYED_ELSEWHERE <= served
 
 
 @pytest.mark.db_commit

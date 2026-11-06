@@ -9,6 +9,7 @@ import logging
 import re
 import time
 from collections.abc import Sequence
+from dataclasses import dataclass
 from uuid import uuid4
 
 from fastapi.routing import APIRoute
@@ -17,7 +18,11 @@ from starlette.exceptions import HTTPException
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 from uvicorn.middleware.proxy_headers import ProxyHeadersMiddleware
 
-from energyiq.platform.http.problems import problem_response, request_id_from
+from energyiq.platform.http.problems import (
+    ProblemError,
+    problem_response,
+    request_id_from,
+)
 from energyiq.platform.logging import ACCESS_LOGGER, ERROR_LOGGER
 
 REQUEST_ID_HEADER = "X-Request-ID"
@@ -129,23 +134,50 @@ class RequestContextMiddleware:
             )
 
 
+@dataclass(frozen=True)
+class RouteLimit:
+    """A larger body cap for one route, with its own 413 problem code."""
+
+    method: str
+    pattern: re.Pattern[str]
+    max_bytes: int
+    code: str
+
+
 class BodySizeLimitMiddleware:
     """Reject bodies over ``max_bytes``, declared or streamed (AC-9).
 
     A declared ``Content-Length`` is checked before the app runs. A streamed
     body raises ``HTTPException(413)`` from ``receive`` once the running count
     passes the cap; FastAPI re raises that instead of wrapping it as 400.
+    A matching ``RouteLimit`` replaces the cap and the problem code for that
+    route only (spec 0012/0002: uploads), with the same two checks.
     """
 
-    def __init__(self, app: ASGIApp, max_bytes: int) -> None:
+    def __init__(
+        self,
+        app: ASGIApp,
+        max_bytes: int,
+        route_limits: Sequence[RouteLimit] = (),
+    ) -> None:
         self.app = app
         self.max_bytes = max_bytes
+        self.route_limits = tuple(route_limits)
+
+    def _limit(self, scope: Scope) -> tuple[int, str | None]:
+        for limit in self.route_limits:
+            if scope["method"] == limit.method and limit.pattern.fullmatch(
+                scope["path"]
+            ):
+                return limit.max_bytes, limit.code
+        return self.max_bytes, None
 
     async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
         if scope["type"] != "http":
             await self.app(scope, receive, send)
             return
 
+        max_bytes, code = self._limit(scope)
         declared = Headers(scope=scope).get("content-length")
         if declared is not None:
             if not _CONTENT_LENGTH.fullmatch(declared.strip()):
@@ -154,9 +186,9 @@ class BodySizeLimitMiddleware:
                 )
                 await response(scope, receive, send)
                 return
-            if int(declared) > self.max_bytes:
+            if int(declared) > max_bytes:
                 response = problem_response(
-                    413, "payload_too_large", request_id_from(scope)
+                    413, code or "payload_too_large", request_id_from(scope)
                 )
                 await response(scope, receive, send)
                 return
@@ -168,7 +200,9 @@ class BodySizeLimitMiddleware:
             message = await receive()
             if message["type"] == "http.request":
                 received += len(message.get("body", b""))
-                if received > self.max_bytes:
+                if received > max_bytes:
+                    if code is not None:
+                        raise ProblemError(413, code)
                     raise HTTPException(413)
             return message
 

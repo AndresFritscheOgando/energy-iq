@@ -12,6 +12,8 @@ MODEL_MODULES = (
     "energyiq.platform.audit",
     "energyiq.properties.models",
     "energyiq.readings.persistence.rows",
+    "energyiq.invoices.models",
+    "energyiq.documents.models",
 )
 
 

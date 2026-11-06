@@ -1,0 +1,32 @@
+# Frontend data access: one generated client, one mutator, server prefetch
+
+**Status:** Accepted
+**Date:** 2026-11-04
+**Context:** P3-01 puts a Next.js App Router app (`frontend/`) on top of the Phase 2 API. Every later screen (P3-02 to P3-04) copies whatever this ticket sets up for fetching data, carrying the session, mapping errors, and guarding pages. The browser must never hold a readable credential ([ADR-007](ADR-007-session-auth-same-origin-proxy.md)), no authenticated response may be cached across users, and login rate limits must keep seeing each browser's own address behind the proxy. Decided in [spec 0010](../specs/0010-nextjs-foundation-session/index.md) ([rationale](../specs/0010-nextjs-foundation-session/rationale.md)).
+
+## Decision
+- **Same origin proxy.** `next.config.ts` rewrites `/api/:path*` to `ENERGYIQ_API_ORIGIN`. The destination is written into the build, so the same value must be set for `next build` and `next start`; both fail without it. The variable is read only in `next.config.ts` and `src/lib/api/server.ts`, there is no `NEXT_PUBLIC_` variable, and a test checks that the built client bundle does not contain the backend origin.
+- **Generated client.** Orval 8 generates React Query hooks and fetch functions (`tags-split`, response envelope off) from the committed `backend/tests/snapshots/openapi.json` into `src/lib/api/generated/`. The output is committed; a test regenerates it and fails on any difference. Backend `operationId` values are the route function names (`login`, `list_properties`), unique by test.
+- **One mutator.** `src/lib/api/fetcher.ts` is the only API `fetch` caller. It adds `X-EnergyIQ-CSRF: 1` on unsafe methods, throws `ApiError` for problem bodies and `ApiUnavailableError` for outages and non problem failures, and on the server refuses to run without `serverRequestInit()` (filtered session cookie, `cache: "no-store"`, 10 second timeout). Its `ErrorType` export makes generated hooks report those two error classes.
+- **Server prefetch with hydration.** A Server Component fetches through `getServerQueryClient()` (one QueryClient per request through `React.cache`) with the generated query options, then hands the cache to the browser with `HydrationBoundary`. The browser QueryClient is created once in the provider.
+- **Guard in every page.** Each `(app)` page starts with `await requireSession(path, searchParams)`; a layout is never the guard. Signed out redirects to `/login?next=...` (validated by `safeNextPath`); an unreachable API renders `<ApiUnavailable>` instead. A global browser `onError` handles a `not_authenticated` 401 mid use once.
+- **Classic dynamic rendering.** The scaffold's `cacheComponents` and `partialPrefetching` are off: every protected page reads cookies and must render per request, and Cache Components would require a Suspense shell around each cookie read without adding value here. Revisit with the first public, cacheable page.
+- **Multi hop proxy rule.** FastAPI trusts `X-Forwarded-For` only from `ENERGYIQ_FORWARDED_ALLOW_IPS` (Uvicorn's `ProxyHeadersMiddleware`, outermost, IPv4 mapped peers unmapped; Uvicorn runs with `--no-proxy-headers`). Every proxy between the browser and FastAPI (a load balancer in front of Next.js, for example) must be listed there, or every user maps to that proxy's address and shares one login rate limit bucket. `prod` refuses to start until the list is set.
+- **Client address from Next.js (AC-18).** Measured on Next.js 16.4.5: the `/api` rewrite never sets `X-Forwarded-For`, keeps a browser supplied value as is, and Next.js fills the header from the socket only when the browser sent none and the request passed through a `proxy.ts`. Once a browser sends the header the socket address is lost, so Next.js cannot repair a spoofed value alone. `src/proxy.ts` (matcher `/api/:path*`) is controlled by the server only `ENERGYIQ_EDGE_PROXY`, exactly `true` or `false`. `false` deletes `X-Forwarded-For` and `X-Forwarded-Proto` before the rewrite: unspoofable, but every browser shares one login and register bucket (the dev default and the safe state). `true` leaves it alone and is safe only behind an edge proxy that appends the real peer address, overwrites `X-Forwarded-Proto` with the browser scheme, and is the only way to reach Next.js; FastAPI's rightmost untrusted rule then picks the address the edge appended and ignores anything a browser put before it. Unset or any other value behaves as `false` in dev and test, and makes `next build` and `next start` fail naming the variable; `proxy.ts` itself treats anything but the exact text `true` as `false`. The value is read per request, so one build serves both topologies. `frontend/scripts/check-edge-proxy.mjs` is the tripwire if a later Next.js release changes this behavior.
+- **Rewrite coverage invariant.** `experimental.caseSensitiveRoutes` stays `true`, and every rewrite to FastAPI must match a path covered by `src/proxy.ts`. A case variant such as `/API/` must never reach FastAPI without header removal. Rerun `frontend/scripts/check-edge-proxy.mjs` after a Next.js upgrade or rewrite change.
+- **No font host.** System font stacks replace `next/font/google`, so builds and pages never contact a third party font service.
+
+## Alternatives considered
+- **Hand written fetch helpers per screen.** No drift test, no compile errors when the API changes, and each screen would repeat CSRF and error handling.
+- **Credentialed CORS straight to FastAPI.** Rejected in ADR-007.
+- **Guard in the `(app)` layout or in `proxy.ts`.** A layout cannot see the URL and is not rerendered on client navigation; a proxy check would still need the page level call to render the unavailable state.
+- **Passing `UserOut` as props instead of hydration.** Simpler for P3-01 alone, but P3-02 needs the hydration pattern.
+
+## Consequences
+- New screens add only their own logic; API changes appear as typed compile errors and reviewable generated diffs.
+- Each server rendered protected page costs one `/auth/me` call (verified live: one per page render).
+- The server and browser run the same client code, so the per request QueryClient and `no-store` rules must hold.
+- Changing the backend address needs a rebuild.
+
+## Revisit trigger
+A public, cacheable page appears (Cache Components), the frontend and API move to different sites, a deployment adds a proxy hop whose address is not stable, or the edge proxy check script starts failing after a Next.js upgrade.

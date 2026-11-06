@@ -88,7 +88,7 @@ Open exactly `http://localhost:3000`. That is the dev trusted origin; `http://12
 
 `ENERGYIQ_API_ORIGIN` is the FastAPI origin (dev default `http://127.0.0.1:8000`). Next.js writes the rewrite destination into the build, so set the same value for `pnpm build` and `pnpm start`; a production build or start without it fails naming the variable. It is server only: never prefix it with `NEXT_PUBLIC_`.
 
-`ENERGYIQ_EDGE_PROXY` (exactly `true` or `false`) says whether a trusted edge proxy sits in front of Next.js. The `/api` rewrite adds no client address and passes a browser supplied `X-Forwarded-For` through unchanged, so `src/proxy.ts` decides what FastAPI sees. `false` (the dev default when unset) deletes `X-Forwarded-For` and `X-Forwarded-Proto`: nothing can be spoofed, and every browser shares one login and register rate limit bucket. `true` keeps it; use it only when a load balancer, nginx, or Caddy appends the real peer address, overwrites (never appends to) `X-Forwarded-Proto` with the scheme the browser used, and is the only way to reach Next.js, and list that proxy and the Next.js host in `ENERGYIQ_FORWARDED_ALLOW_IPS`. Unlike `ENERGYIQ_API_ORIGIN`, it is read per request, so one build serves both setups; `pnpm build` and `pnpm start` fail naming it when it is unset in production. `node frontend/scripts/check-edge-proxy.mjs` reruns the live check with an echo server in place of FastAPI.
+`ENERGYIQ_EDGE_PROXY` (exactly `true` or `false`) says whether a trusted edge proxy sits in front of Next.js. The `/api` rewrite itself adds no client address and preserves a browser supplied `X-Forwarded-For`; Next.js may fill the socket address when the request passes through `src/proxy.ts` without that header. `false` (the dev default when unset) deletes `X-Forwarded-For` and `X-Forwarded-Proto`: nothing can be spoofed, and every browser shares one login and register rate limit bucket. `true` keeps them; use it only when a load balancer, nginx, or Caddy appends the real peer address, overwrites (never appends to) `X-Forwarded-Proto` with the scheme the browser used, and is the only way to reach Next.js, and list that proxy and the Next.js host in `ENERGYIQ_FORWARDED_ALLOW_IPS`. Unlike `ENERGYIQ_API_ORIGIN`, it is read per request, so one build serves both setups; `pnpm build` and `pnpm start` fail naming it when it is unset in production. Routes are case sensitive, so `/API/...` is not rewritten. `node frontend/scripts/check-edge-proxy.mjs` reruns the live check with an echo server in place of FastAPI after a Next.js upgrade or rewrite change.
 
 Checks: `pnpm lint`, `pnpm typecheck`, `pnpm test`, `pnpm format:check`, and `pnpm build`. After a backend API change, regenerate the OpenAPI snapshot (`ENERGYIQ_UPDATE_SNAPSHOTS=1 uv run pytest backend/tests/api/test_openapi.py`), then run `pnpm gen:api` and commit both; `pnpm test` fails while the generated client is stale.
 
@@ -183,6 +183,7 @@ All code lives in [`backend/src/energyiq`](backend/src/energyiq). Tests live in 
 | `platform.db`, `platform.http.ready`, ORM rows, `backend/alembic` | PostgreSQL foundation: a lazy engine (UTC, statement timeout), per request sessions, revision `0001` with the core tables and named constraints, column level grants for the app role, `GET /health/ready`, and 503 `database_unavailable` for connection, pool, and statement timeouts. No user data routes yet. | [spec 0009/0001](docs/specs/0009-phase-two-persistence-auth/0001-database-foundation.md) |
 | `identity`, `properties`, `platform.http.csrf`, `platform.pagination`, `platform.audit`, `platform.maintenance` | Accounts with Argon2id passwords and server sessions in an HttpOnly cookie (14 day absolute, 24 hour idle), a header plus `Origin` CSRF check on every unsafe route, database backed login and register rate limits with `Retry-After`, owner scoped property and meter CRUD with archive and deactivation, keyset pagination, an audit row for every write, and the purge command. Revision `0002`. The summary route now needs a session. | [spec 0009/0002](docs/specs/0009-phase-two-persistence-auth/0002-identity-properties-meters.md) |
 | `readings.persistence`, `readings.api.stored_router`, `platform.idempotency` | Owner scoped stored reading and event routes, status and decision transitions, date only noon conversion, paginated lists, safe POST replay, and consumption from stored history. Revision `0003`. | [spec 0009/0003](docs/specs/0009-phase-two-persistence-auth/0003-readings-events-api.md) |
+| `invoices` | Manual invoice drafts, owner confirmed immutable revisions, correction history, and exclusive current billing periods. Revision `0004`; the meter page includes a manual review panel. | [spec 0012/0001](docs/specs/0012-phase-four-bill-intelligence/0001-manual-invoices.md) |
 | `main`, `platform`, `readings.api` | FastAPI app: `GET /health` and the stateless `POST /api/v1/consumption/summary`, with problem details errors, request ids, a JSON access log, body caps, settings, and CORS. | [spec 0008](docs/specs/0008-minimal-fastapi-application/index.md) |
 
 Property based tests (P1-05, [spec 0006](docs/specs/0006-reading-chain-property-tests/index.md)) check ordering, interval rules, window tiling, and additivity across generated reading chains. Set `ENERGYIQ_HYPOTHESIS_PROFILE=deep` for a wider random search.
@@ -191,7 +192,28 @@ P2-05 added the Phase 2 gate tests: route enumerated cross user, unauthenticated
 
 The Phase 2 gate passed on 2026-11-04 after a fresh model code review ([roadmap](docs/05-IMPLEMENTATION-ROADMAP.md)).
 
-**Next up:** finish P3-01 (`/check verify` of the AC-18 address handling, then a fresh model review), then P3-02. P3-01 is the Next.js setup, typed API layer, and session strategy. Reading semantics and discontinuity rules are documented in [12-METER-SEMANTICS](docs/12-METER-SEMANTICS.md) (P1-06).
+## Run the demo
+
+Start the database and migrate it, start the API and web app as described above, then seed synthetic data (`ENERGYIQ_ENV` must be `dev` or `test`, and the API must be on loopback):
+
+```powershell
+$env:ENERGYIQ_ENV = "dev"
+uv run python backend/scripts/seed_demo.py
+```
+
+Sign in at `http://localhost:3000` with the email and password it prints (`demo@example.test`; set `ENERGYIQ_DEMO_PASSWORD` to change the dev only default). Open the meter and pick 365 days to see steps, gaps, and an unexplained decrease.
+
+## Run the end to end suite
+
+It needs the Docker database and Chromium. It rebuilds its own `energyiq_e2e` database and starts its own servers on ports 3100 and 8100, so stop nothing else unless those ports are busy.
+
+```powershell
+cd frontend
+pnpm exec playwright install chromium
+pnpm test:e2e
+```
+
+**Next up:** get a fresh model review of spec 0011, then resolve any findings before accepting it. P3-01 is complete and [spec 0010](docs/specs/0010-nextjs-foundation-session/index.md) is Accepted. Reading semantics and discontinuity rules are documented in [12-METER-SEMANTICS](docs/12-METER-SEMANTICS.md) (P1-06).
 
 ## Documentation
 

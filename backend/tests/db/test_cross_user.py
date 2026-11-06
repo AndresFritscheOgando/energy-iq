@@ -57,6 +57,25 @@ ID_ROUTES: dict[tuple[str, str], Call] = {
     ("POST", f"{V1}/meters/{{meter_id}}/events/{{event_id}}/approve"): Call(),
     ("POST", f"{V1}/meters/{{meter_id}}/events/{{event_id}}/reject"): Call(),
     ("GET", f"{V1}/meters/{{meter_id}}/consumption"): Call(params=WINDOW),
+    ("POST", f"{V1}/meters/{{meter_id}}/invoices"): Call({}),
+    ("GET", f"{V1}/meters/{{meter_id}}/invoices"): Call(),
+    ("GET", f"{V1}/invoices/{{invoice_id}}"): Call(),
+    ("POST", f"{V1}/invoices/{{invoice_id}}/revisions"): Call(
+        {
+            "base_revision_id": str(uuid4()),
+            "expected_current_revision_id": str(uuid4()),
+            "total_dop": "1",
+        }
+    ),
+    ("POST", f"{V1}/invoices/{{invoice_id}}/confirm"): Call(
+        {"draft_revision_id": str(uuid4()), "expected_current_revision_id": None}
+    ),
+    # Spec 0012/0002: the upload route answers 404 before it reads the body.
+    ("POST", f"{V1}/meters/{{meter_id}}/documents"): Call(),
+    ("GET", f"{V1}/documents/{{document_id}}"): Call(),
+    ("GET", f"{V1}/documents/{{document_id}}/source"): Call(),
+    ("POST", f"{V1}/documents/{{document_id}}/retry"): Call(),
+    ("DELETE", f"{V1}/documents/{{document_id}}"): Call(),
 }
 
 # Every paginated list: the attribute of ``Holdings`` naming its parent id
@@ -66,6 +85,7 @@ LIST_ROUTES: dict[tuple[str, str], str | None] = {
     ("GET", f"{V1}/properties/{{property_id}}/meters"): "property_id",
     ("GET", f"{V1}/meters/{{meter_id}}/readings"): "meter_id",
     ("GET", f"{V1}/meters/{{meter_id}}/events"): "meter_id",
+    ("GET", f"{V1}/meters/{{meter_id}}/invoices"): "meter_id",
 }
 
 
@@ -123,7 +143,7 @@ def _send(
     call = ID_ROUTES[key]
     return client.request(
         method,
-        template.format(**ids),
+        template.format(**{**_random_ids(), **ids}),
         json=call.json,
         params=call.params,
         headers=headers,
@@ -133,7 +153,14 @@ def _send(
 def _random_ids() -> dict[str, str]:
     return {
         name: str(uuid4())
-        for name in ("property_id", "meter_id", "reading_id", "event_id")
+        for name in (
+            "property_id",
+            "meter_id",
+            "reading_id",
+            "event_id",
+            "invoice_id",
+            "document_id",
+        )
     }
 
 
@@ -257,9 +284,16 @@ def _grow(holdings: Holdings, tag: str) -> Owned:
         )
         for day in (2, 3)
     }
+    invoices = {
+        created(
+            client.post(f"{meter_path}/invoices", json={"total_dop": str(100 + index)})
+        )
+        for index in range(3)
+    }
     keys = list(LIST_ROUTES)
     return Owned(
-        holdings, dict(zip(keys, (properties, meters, readings, events), strict=True))
+        holdings,
+        dict(zip(keys, (properties, meters, readings, events, invoices), strict=True)),
     )
 
 

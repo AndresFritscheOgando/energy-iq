@@ -28,6 +28,8 @@ export type ServerInit = {
   baseUrl: string;
   cookie: string;
   cache: "no-store";
+  /** Overrides `SERVER_TIMEOUT_MS`; only the consumption prefetch sets it. */
+  timeoutMs?: number;
 };
 
 /**
@@ -53,7 +55,9 @@ function buildInit(url: string, options: RequestOptions): { target: string; init
   } else {
     headers.delete(CSRF_HEADER);
   }
-  if (rest.body !== undefined && rest.body !== null && !headers.has("Content-Type")) {
+  // A FormData body needs the browser to write its own multipart boundary.
+  const isForm = typeof FormData !== "undefined" && rest.body instanceof FormData;
+  if (rest.body !== undefined && rest.body !== null && !isForm && !headers.has("Content-Type")) {
     headers.set("Content-Type", "application/json");
   }
   headers.set("Accept", `application/json, ${PROBLEM_MEDIA_TYPE}`);
@@ -70,7 +74,7 @@ function buildInit(url: string, options: RequestOptions): { target: string; init
   if (server.cookie) {
     headers.set("Cookie", server.cookie);
   }
-  const timeout = AbortSignal.timeout(SERVER_TIMEOUT_MS);
+  const timeout = AbortSignal.timeout(server.timeoutMs ?? SERVER_TIMEOUT_MS);
   return {
     target: `${server.baseUrl}${url}`,
     init: {

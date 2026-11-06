@@ -4,12 +4,14 @@
  * EnergyIQ RD
  * OpenAPI spec version: 0.1.0
  */
+import type { ListReadingsOrder } from './listReadingsOrder';
 import type { ReadingStatus } from './readingStatus';
 
 export type ListReadingsParams = {
   from?: string | null;
   to?: string | null;
   status?: ReadingStatus | null;
+  order?: ListReadingsOrder;
   /**
    * @minimum 1
    * @maximum 500

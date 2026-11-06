@@ -49,6 +49,17 @@ ERROR_DETAILS: Mapping[str, str] = {
     "reading_exists_at_instant": "A reading already exists at this instant.",
     "reading_voided": "A voided reading cannot change status.",
     "event_not_pending": "The event has already been decided.",
+    # Spec 0012/0002 (private upload and processing runs).
+    "upload_too_large": "The uploaded file exceeds the size limit.",
+    "upload_not_pdf": "Upload one PDF file named with a .pdf ending.",
+    "upload_invalid": "The upload must contain exactly one file part named file.",
+    "pdf_invalid": "The file is not a usable PDF.",
+    "too_many_active": "Too many documents are still being processed.",
+    "retries_exhausted": "This document has used all of its processing runs.",
+    "run_active": "A processing run is still active for this document.",
+    "run_not_failed": "Only a failed run can be retried.",
+    "document_deleted": "The document has been deleted.",
+    "document_in_use": "An invoice revision uses this document as its source.",
 }
 
 VALIDATION_MESSAGES: Mapping[str, str] = {

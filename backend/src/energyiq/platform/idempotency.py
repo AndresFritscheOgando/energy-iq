@@ -101,10 +101,16 @@ def execute_idempotent[T: BaseModel](
     now: datetime,
     status: int,
     action: Callable[[], T],
+    *,
+    digest: bytes | None = None,
 ) -> Response:
-    """Own or replay a key in the same transaction as the mutation and audit."""
+    """Own or replay a key in the same transaction as the mutation and audit.
+
+    ``digest`` replaces the JSON body hash for routes whose input is not JSON
+    (a multipart upload hashes its meter ID and the file's SHA-256).
+    """
     operation = _operation(request)
-    digest = _body_hash(body)
+    digest = digest if digest is not None else _body_hash(body)
     with session.begin():
         if key is not None:
             values = {

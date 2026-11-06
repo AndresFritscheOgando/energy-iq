@@ -76,6 +76,8 @@ def list_readings(
     start: datetime | None,
     end: datetime | None,
     status: str | None,
+    *,
+    descending: bool = False,
 ) -> tuple[Sequence[ReadingRow], str | None]:
     query = _readings(owner_id, meter_id)
     if start is not None:
@@ -91,6 +93,7 @@ def list_readings(
         ReadingRow.id,
         lambda row: (row.recorded_at, row.id),
         params,
+        descending=descending,
     )
 
 
