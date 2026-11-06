@@ -73,3 +73,12 @@ Ran live against the dev database with a fresh account, uvicorn on :8000 (and :8
 - [ ] OCR or vision candidate measured on the same corpus → AC-4 (not run; no fallback enabled)
 
 _Still not run live (covered only by the automated suite): crash and lease recovery with `attempts_exhausted`, delete while running, `document_in_use`, `meter_inactive`, identical 404 bodies for foreign and random IDs, source download headers, the audit event contents, reconcile `unpurged_tombstones` and `missing_files` simulations, and a hostile PDF for memory and file write limits. Reconcile also reports 11 missing files from an earlier session account (`v1-cb4fb6`), none from this run._
+
+
+## Child 0005 · Invoice review and provenance screens (`/check verify`, 2026-11-06)
+- [x] List, new, and review routes work; save is a draft and confirm is separate → AC-1, AC-3, AC-4 (e2e `invoice-review`, `invoices`)
+- [x] Source is a download only, no inline frame; signed out 401, other account 404 → AC-2, AC-5 (e2e)
+- [x] Stale save keeps edits and blocks save and confirm until the owner chooses → AC-4 (e2e, unit)
+- [x] Axe light and dark at desktop and 390 wide, no sideways scroll at 320, keyboard only flow → AC-5 (e2e)
+- [x] Proposal conflicts and contradictions named by field on `/invoices/[invoiceId]` → AC-3 (built 2026-11-06; unit test and e2e with a mocked extraction, axe light and dark)
+- [ ] Review page with real extracted proposals (needs worker and local model) → AC-2 (not run)
